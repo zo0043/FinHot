@@ -118,11 +118,22 @@ function extractJson(text: string): unknown {
   const start = t.indexOf("{");
   const end = t.lastIndexOf("}");
   if (start === -1 || end === -1) throw new ModelOutputError("No JSON object in model output");
-  const body = t.slice(start, end + 1);
+  let body = t.slice(start, end + 1);
   try {
     return JSON.parse(body);
   } catch {
+    // Some gateways/models double-encode the answer as a JSON string ({"label":...} literally);
+    // unescape once, then retry before falling back to control-char escaping.
+  }
+  try {
+    const unescaped = body.replace(/\\"/g, '"');
+    const parsed = JSON.parse(unescaped);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {}
+  try {
     return JSON.parse(escapeControlCharsInStrings(body));
+  } catch {
+    return JSON.parse(escapeControlCharsInStrings(body.replace(/\\"/g, '"')));
   }
 }
 
@@ -160,7 +171,10 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
   if (!baseUrl || !apiKey || !spec.model) throw new Error(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
 
   const temperature = opts.temperature ?? 0.2;
-  const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + (spec.key.endsWith("-think") ? 4000 : 0);
+  // zero-* flash groups served by our own gateway reason by default (deepseek-v4-flash / qwen3.8-flash);
+  // short structured tasks budget room for reasoning_content so the JSON answer is not truncated.
+  const reasoningBudget = spec.key.endsWith("-think") ? 4000 : spec.key === "default" ? 6000 : 0;
+  const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + reasoningBudget;
   const userText = typeof opts.user === "string" ? opts.user : JSON.stringify(opts.user);
   const body: Record<string, unknown> = {
     model: spec.model,
@@ -192,7 +206,9 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
       try {
         res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          // x-api-key alongside Bearer: gpt-load style gateways (api.zero43.top) authenticate with it,
+          // others (OpenAI-compatible) ignore it.
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "x-api-key": apiKey },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
         });
@@ -221,11 +237,17 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
     },
   );
 
-  const response = receipt.response as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }>; usage?: Record<string, unknown> };
+  const response = receipt.response as { choices?: Array<{ message?: { content?: string; reasoning_content?: string }; finish_reason?: string }>; usage?: Record<string, unknown> };
   const content = response.choices?.[0]?.message?.content ?? "";
+  // Reasoning-first gateways (step-5-preview) sometimes burn all tokens in `reasoning_content` and
+  // leave `content` empty; fall back to any JSON object that survives in the reasoning trace.
+  const reasoning = String(response.choices?.[0]?.message?.reasoning_content ?? "");
+  const candidate = content.trim().length > 0 && !/\{|\[/.test(content) && /\{|\[/.test(reasoning)
+    ? reasoning
+    : content;
   let parsed: z.infer<S>;
   try {
-    parsed = opts.schema.parse(opts.parse ? opts.parse(content) : extractJson(content));
+    parsed = opts.schema.parse(opts.parse ? opts.parse(candidate) : extractJson(candidate));
   } catch (error) {
     // Unusable output: record it and let a later attempt pay for a fresh answer.
     await rejectReceivedResponse(receipt.receiptId, `unusable output: ${String(error).slice(0, 500)}`);
