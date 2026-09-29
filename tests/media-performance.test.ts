@@ -77,7 +77,7 @@ test("site media exposes responsive previews and full lightboxes while RSS retai
 });
 
 test("concurrent cold OG and poster requests all succeed with identical cached bytes", async () => {
-  const card = { kicker: "AIHOT", title: "并发渲染验证", subtitle: "同一图片只生成一次" };
+  const card = { kicker: "FinHot", title: "并发渲染验证", subtitle: "同一图片只生成一次" };
   const cards = await Promise.all(Array.from({ length: 6 }, () => renderOg(card)));
   for (const result of cards) assert.deepEqual(result, cards[0]);
   assert.equal((await sharp(cards[0]!.png).metadata()).width, 1200);

@@ -1,6 +1,6 @@
 # 把它改成你的行业
 
-这份仓库默认是一个“AI 行业”的示例站：示范信源是一批公开的 AI 资讯源，精选口味是 AIHOT 在 AI 领域调了很久的那一套。要把它变成“法律热点”“HR 热点”“黄金热点”，要改的东西几乎都在 [`industry/`](../industry/) 这一个文件夹里，代码基本不用动。
+这份仓库默认是一个“财经”热点的示例站（FinHot）：示范信源是一批公开的财经资讯源（盘面、宏观、A 股、全球市场、重点人物），精选口味是本站长期沉淀下来的一套财经筛选口径。要把它变成“法律热点”“HR 热点”“黄金热点”，要改的东西几乎都在 [`industry/`](../industry/) 这一个文件夹里，代码基本不用动。
 
 如果你用 Claude Code、Codex 这类 Agent，可以把下面这段直接发给它，然后回答它的问题：
 
@@ -15,7 +15,7 @@
 ## 1. 站名和文案：`industry/site.ts`
 
 - `name`：站名。导航、标题、分享图、RSS、MCP、后台都用它。
-- `subject`：行业词。页面上“AI 日报”“全部 AI 动态”会变成“法律日报”“全部法律动态”。
+- `subject`：行业词。页面上“财经日报”“全部财经动态”会变成“法律日报”“全部法律动态”。
 - `homeTitle`、`description`、`tagline`：首页标题、一句话介绍、侧边栏小字。
 - `mcpPrefix`：MCP 工具名前缀，比如 `lawhot` 会得到 `lawhot_get_latest`。有人接入以后不要再改。
 - `crawlerName`：抓取信源时报的名字，别用别人的站名。
@@ -60,7 +60,7 @@
 | `prefilter.md` | 预筛：这条资料是不是这个行业的事。宽召回，只拦明显无关的 |
 | `selection-score.md` | **评分标准**：给 0–100 分。里面有内容类型、五个维度、各类型的权重、必须正常评价的价值、必须压住的噪声 |
 | `content-understanding.md` | 入选内容的写法：中文标题、答案先行的摘要、推荐理由、标签 |
-| `rules-domain.md` | 行业术语的翻译与保留规则（示例是 AI 术语：LLM 译作大语言模型、Token 保留英文……） |
+| `rules-domain.md` | 行业术语的翻译与保留规则（示例是财经术语：EPS 译作每股收益、QoQ／YoY 这类英文缩写保留原文……） |
 | `summarize-*.md` | 其他内容的标题摘要写法 |
 | `structure.md` | 分类、标签、主体公司、事实的结构化抽取 |
 | `group-*.md` | 事件归组：两篇报道是不是同一件事 |
@@ -73,7 +73,7 @@
 
 ## 5. 门槛与校准：`industry/selection.ts`
 
-两次评分之和 ≥ 2 × 门槛才入选。默认门槛（T1 60、T1_5 65、T2 76）是 AIHOT 在 AI 领域校准出来的，换了行业和提示词，需要重新校准：
+两次评分之和 ≥ 2 × 门槛才入选。默认门槛（T1 60、T1_5 65、T2 76）是本站针对财经领域校准出来的，换了行业和提示词，需要重新校准：
 
 1. 从你的信源里挑 100–200 条资料，自己标“该选 / 不该选”，存成 `.data/gold.jsonl`（格式见 [精选与校准](selection.md)，`industry/gold.example.jsonl` 有两条示例）。
 2. 运行 `node --env-file=.env scripts/eval-selection.ts --gold .data/gold.jsonl`，看准确率、查准率、查全率，和不同门槛下的结果。
@@ -81,17 +81,19 @@
 
 这一步决定了你的站“选得准不准”。
 
-## 6. 只对 AI 有意义的两个模块：`industry/features.ts`
+## 6. 两个内置的可选模块：`industry/features.ts`
+
+框架自带两个可选模块，只服务于 AI 行业，FinHot 作为财经站默认把它们都关掉（`leaderboard` 和 `codexResetMonitor` 都是 `false`）：
 
 - `leaderboard`：模型榜（`/leaderboard`）。
 - `codexResetMonitor`：Codex 重置监控（`/codex-reset`）。
 
-别的行业把两项都设为 `false`：导航入口、定时任务、接口和站点地图都会跟着关掉。想彻底删掉代码，删这些目录并处理掉编译错误即可：`packages/backend/src/leaderboard/`、`packages/backend/src/monitor/`、`apps/web/app/features/leaderboard/`、`apps/web/app/features/monitor/`、`apps/web/app/routes/leaderboard*.tsx`、`apps/web/app/routes/codex-reset.tsx`、`apps/api/src/routes/leaderboard.ts`。
+两个开关只决定“要不要用”：关掉后导航入口、定时任务、接口和站点地图都会跟着消失。FinHot 已把网页侧页面和 `apps/api` 的 `/leaderboard` 接口删掉；想彻底删掉剩余代码，删这两个目录并处理掉编译错误即可：`packages/backend/src/leaderboard/`、`packages/backend/src/monitor/`。
 
 ## 7. 品牌：`industry/brand/`
 
 - `logo.svg`、`icon.png`（512）、`icon-192.png`、`apple-icon.png`（180）、`favicon.ico`：站点图标。
-- `nameplates/`：日报、周报、月报页顶部的报头字（比如“AI日报”）。换了行业词以后重新生成：
+- `nameplates/`：日报、周报、月报页顶部的报头字（比如“财经日报”）。换了行业词以后重新生成：
   ```bash
   npm pack @fontsource/noto-sans-sc@5.3.0 && tar xzf fontsource-noto-sans-sc-5.3.0.tgz
   node scripts/nameplates.ts package
@@ -119,6 +121,6 @@ DATABASE_URL=postgres://…/myhot_test npm test     # 库名必须以 _test 或 
 node scripts/smoke.ts --base http://localhost:3000   # 站点跑起来以后
 ```
 
-`tests/` 里有些测试用的是示例行业的分类、标签和公司（比如 `ai-models`、“模型发布”、Anthropic）。改了 `industry/taxonomy.ts` 以后这些测试会失败，把例子换成你行业里的对应项即可，测的规则本身不用改。
+`tests/` 里有些测试用的是示例行业的分类、标签和公司（比如 `a-share`、“三季报”、贵州茅台）。改了 `industry/taxonomy.ts` 以后这些测试会失败，把例子换成你行业里的对应项即可，测的规则本身不用改。
 
 然后打开网站看一眼首页、全部动态、日报和关于页，再去后台“信源”页看信源是不是都抓成功了。

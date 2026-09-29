@@ -146,19 +146,19 @@ test("config entries a source kind does not implement are named, not ignored", (
 test("a listing that links other articles in its teasers takes only the links that begin a line", () => {
   // Axios Technology through Jina: each headline stands on its own line; its teaser links older stories inline.
   const md = [
-    "### [Amodei critics target Trump with hit piece before White House dinner](https://example.org/2026/09/27/amodei)",
-    "[![Image 3: Scoop](https://example.org/a.jpg)](https://example.org/2026/09/27/dinner)",
-    "[Scoop: Anthropic's Dario Amodei to have White House dinner](https://example.org/2026/09/27/dinner)",
-    "[How Ed Sheeran's U.S. tour went off the rails in 3 weeks](https://example.org/2026/09/25/sheeran)[![Image 12: Ed Sheeran](https://example.org/b.jpg)](https://example.org/2026/09/25/sheeran)",
-    "Ed Sheeran's two Gillette Stadium shows were canceled Friday, capping a [chaotic three weeks](https://example.org/2026/09/15/sheeran-loop).",
-    "**Why it matters:** AI is energy-hungry. [Political divides](https://example.org/2026/09/24/climate-politics) can slow progress.",
-    "[Go deeper (3 min. read)](https://example.org/2026/09/25/sheeran)",
+    "### [Regulator widens its probe into short-selling before the close](https://example.org/2026/09/27/probe)",
+    "[![Image 3: Scoop](https://example.org/a.jpg)](https://example.org/2026/09/27/rules)",
+    "[Scoop: Fund managers face new disclosure rules after the close](https://example.org/2026/09/27/rules)",
+    "[How a small-cap rally went off the rails in 3 weeks](https://example.org/2026/09/25/rally)[![Image 12: rally](https://example.org/b.jpg)](https://example.org/2026/09/25/rally)",
+    "Two of the week's biggest IPOs were pulled Friday, capping a [chaotic three weeks](https://example.org/2026/09/15/rally-loop).",
+    "**Why it matters:** Rates are still high. [Political divides](https://example.org/2026/09/24/climate-politics) can slow spending.",
+    "[Go deeper (3 min. read)](https://example.org/2026/09/25/rally)",
   ].join("\n\n");
   const config = { url: "https://r.jina.ai/https://example.org/technology", allowUrlPrefixes: ["https://example.org/2"], linksStartLine: true };
   assert.deepEqual(fromMarkdown(md, "https://example.org", source(config)).map((c) => c.title), [
-    "Amodei critics target Trump with hit piece before White House dinner",
-    "Scoop: Anthropic's Dario Amodei to have White House dinner",
-    "How Ed Sheeran's U.S. tour went off the rails in 3 weeks",
+    "Regulator widens its probe into short-selling before the close",
+    "Scoop: Fund managers face new disclosure rules after the close",
+    "How a small-cap rally went off the rails in 3 weeks",
   ]);
   assert.equal(fromMarkdown(md, "https://example.org", source({ ...config, linksStartLine: undefined })).length, 5, "without the option prose links count");
 });

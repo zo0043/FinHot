@@ -1,4 +1,5 @@
 import { Link, useLoaderData } from "react-router";
+import { SITE } from "@aihot/industry/site";
 import { apiGet } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 
@@ -18,7 +19,7 @@ export async function loader({ request }: { request: Request }) {
 }
 
 export function meta() {
-  return pageMeta({ title: "主题", description: "按公司与模型、技术方向、内容形态聚合的 AI 主题页：OpenAI、Anthropic、Agent、多模态、论文与教程等 38 个方向。", path: "/topics", image: "/og/pages/topics.png" });
+  return pageMeta({ title: "主题", description: "按公司与机构、市场与主题、内容形态聚合的主题页，持续汇集近期焦点与精选。", path: "/topics", image: "/og/pages/topics.png" });
 }
 
 export function headers() {
@@ -26,9 +27,9 @@ export function headers() {
 }
 
 const GROUPS = [
-  { key: "company", name: "公司与模型", blurb: "按厂商与模型系追踪：谁发了什么、又赢了哪一局" },
-  { key: "field", name: "技术方向", blurb: "按技术领域深挖：Agent、多模态、具身智能……" },
-  { key: "genre", name: "内容形态", blurb: "按内容类型浏览：论文、教程、观点、政策……" },
+  { key: "company", name: "公司与机构", blurb: "按监管、交易所、机构、龙头公司与海外巨头追踪：谁在影响市场" },
+  { key: "field", name: "市场与主题", blurb: "按市场主线与产业主题深挖：政策、板块与全球因素" },
+  { key: "genre", name: "内容形态", blurb: "按内容类型浏览：异动、公告、政策、数据与研究" },
 ] as const;
 
 export default function TopicsPage() {
@@ -36,9 +37,9 @@ export default function TopicsPage() {
   return (
     <div className="pb-10">
       <header className="pb-2 pt-5 lg:pt-1">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">按主题看 AI</h1>
+        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">按主题看 {SITE.subject}</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-          按公司与模型、技术方向、内容形态浏览 <span className="num">{topics.length}</span> 个主题，持续汇集近期焦点与精选。
+          按公司与机构、市场与主题、内容形态浏览 <span className="num">{topics.length}</span> 个主题，持续汇集近期焦点与精选。
         </p>
       </header>
       {GROUPS.map((g) => (

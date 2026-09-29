@@ -1,8 +1,13 @@
-AIHOT
+FinHot
 Copyright (c) 2026 数字生命卡兹克. The code is licensed under the MIT License (LICENSE).
 
-The name "AIHOT" and the AIHOT logo are not licensed under the MIT License. Please use your own name
-and logo for your site.
+Derived from AIHOT by 数字生命卡兹克 (MIT). This repository is a fork of the AIHOT project
+(https://aihot.news); the original work is Copyright (c) 2026 数字生命卡兹克 and is likewise
+available under the MIT License.
+
+The name "AIHOT" and the AIHOT logo are not licensed under the MIT License; they stay with the
+original project and its author. "FinHot" is the name and identity of this site: it uses neither the
+AIHOT name nor the AIHOT logo. Please use your own name and logo for your site.
 
 This repository also contains third-party material under its own terms:
 

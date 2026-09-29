@@ -33,11 +33,11 @@ export function monthRange(key: string): [string, string] {
   return [`${key}-01`, ymd(new Date(Date.UTC(y, m, 0)))];
 }
 
-/** "这一天的 4 件 AI 大事" / "本周的 12 件 AI 大事" / "8 月的 20 件 AI 大事". */
+/** "这一天的 4 件大事" / "本周的 12 件大事" / "8 月的 20 件大事". */
 export function headline(kind: ReportKind, key: string, count: number): string {
-  if (kind === "daily") return `这一天的 ${count} 件 AI 大事`;
-  if (kind === "weekly") return `本周的 ${count} 件 AI 大事`;
-  return `${Number(key.slice(5, 7))} 月的 ${count} 件 AI 大事`;
+  if (kind === "daily") return `这一天的 ${count} 件大事`;
+  if (kind === "weekly") return `本周的 ${count} 件大事`;
+  return `${Number(key.slice(5, 7))} 月的 ${count} 件大事`;
 }
 
 /** "09.16" for a story inside a week or month. */
@@ -127,18 +127,17 @@ export function dateMark(kind: ReportKind, key: string): { figure: string; top: 
 /** When each kind comes out (F10), for the masthead. */
 export const EDITION: Record<ReportKind, string> = { daily: "每天 08:00 出刊", weekly: "每周一出刊", monthly: "每月 1 日出刊" };
 
-/** The masthead's figures, in the order a reader wants them; zero model releases is left out. */
+/** The masthead's figures, in the order a reader wants them. */
 const METRICS: Array<[key: string, unit: string]> = [
   ["totalEvents", "件大事"],
   ["totalStories", "件大事"],
   ["sourcesCount", "个来源"],
   ["firstPartyEvents", "件一手发布"],
-  ["modelsReleased", "个新模型"],
   ["selectedCount", "条精选"],
   ["reportsCovered", "期日报"],
 ];
 export function metricItems(metrics: Record<string, number>): Array<{ value: number; unit: string }> {
-  return METRICS.filter(([k]) => typeof metrics[k] === "number" && (k !== "modelsReleased" || metrics[k]! > 0)).map(([k, unit]) => ({ value: metrics[k]!, unit }));
+  return METRICS.filter(([k]) => typeof metrics[k] === "number").map(([k, unit]) => ({ value: metrics[k]!, unit }));
 }
 
 /** "前一日 · 9月25日", "上一期 · 第 37 周", "下一期 · 7 月". */
@@ -164,7 +163,7 @@ export function dateLine(kind: ReportKind, key: string): string {
 }
 
 /** What each kind is, under its nameplate. */
-export const MOTTO: Record<ReportKind, string> = { daily: "人工智能 · 每日要闻", weekly: "人工智能 · 每周综述", monthly: "人工智能 · 每月盘点" };
+export const MOTTO: Record<ReportKind, string> = { daily: "每日要闻", weekly: "每周综述", monthly: "每月盘点" };
 
 export interface PeriodCell {
   key: string | null;

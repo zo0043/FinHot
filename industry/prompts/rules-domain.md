@@ -1,45 +1,72 @@
+【金融领域翻译规则 — 本平台 100% 是财经内容（A股、宏观、环球市场、重点人物），严格遵守】
 
-【AI 领域翻译规则 — 本平台 100% 是 AI/ML/LLM 行业内容，严格遵守】
+1. 歧义默认值：以下词在中文有非金融歧义，**一律按金融含义翻译**，不按字面或日常含义处理：
+   - rate = 利率／费率（policy rate 政策利率、federal funds rate 联邦基金利率、lending rate 贷款利率、commission rate 费率）；不译“比率”“等级”，只有 rating 才是评级
+   - option = 期权（stock option 股票期权、美式/欧式期权）；不译“选择”“选项”“可选功能”
+   - call = 看涨期权／认购（call option 看涨期权）；不译“呼叫”“召集”
+   - put = 看跌期权／认沽；不译“放置”
+   - margin = 保证金（融资融券保证金、期货保证金）；只有 profit margin 才是利润率／毛利率，二者不可混
+   - NAV = 基金份额资产净值；navigation 才是导航
+   - LPR = 贷款市场报价利率（Loan Prime Rate）；不译“最优惠利率”
+   - ETF = 交易型开放式指数基金（保留英文；不译“交易所交易费”）；LOF = 上市开放式基金；QDII = 合格境内机构投资者；QFII = 合格境外机构投资者；REIT = 不动产投资信托基金
+   - EPS = 每股收益；PE = 市盈率（price/earnings），与 Private Equity（私募股权）按上下文区分；PB = 市净率；ROE = 净资产收益率
+   - basis point / bp = 基点（1bp = 0.01 个百分点）；不译“基础点”
+   - short / long = 做空／做多（short selling 做空、卖空）；不按“短／长”处理
+   - hedge = 对冲／套期保值；不译“树篱”
+   - liquidity = 流动性（市场流动性、银行体系流动性）；不译“液化”
+   - haircut = 折价（抵押品折扣、估值折扣）；不译“理发”
+   - maturity = 到期（债务到期、期限结构）；不译“成熟”
+   - yield = 收益率（10 年期国债收益率、股息率）；只在原文真是产出语境时才译“产出”
+   - premium = 溢价（风险溢价、股份溢价）；保险语境下的保费才译“保费”
+   - discount = 折价；商品促销语境才译“折扣”
+   - float = 流通（流通股、流通市值）；不译“浮动”
+   - dilution = 摊薄（每股收益摊薄）；不译“稀释液”
+   - covenant = 契约条款（债务契约条款）；不译“盟约”
+   - default = 违约（债务违约）；developer default 才译“默认值”
+   - guidance = 业绩指引（财报电话会中的 guidance）；不译“指导”
+   - beat / miss = 超预期／不及预期
+   - a-share = A股；是市场概念，不译“一级股份”
+   - 公司简称先用全称：单独出现的“平安”一律写“中国平安”，“平安银行”“平安证券”各自用全称；“中信证券／中信银行／中信集团”、“中金公司／中金黄金／中金岭南”不同实体分开写，不互相覆盖
+   - A 股制度词按国内通行写法，不造新译法：ST、*ST、退市整理期、停复牌、龙虎榜、融资融券、北向、南向、注册制、核准制、要约收购、借壳、定向增发、可转债、股权激励、业绩预告、快报、商誉减值、非标审计意见
+   - 口径词照抄原文口径，不自行换算：同比（YoY）、环比（MoM）、季调环比、累计值、预期值、前值、终值、季调/未季调
 
-1. 歧义默认值：以下词在中文有非 AI 歧义，**一律按 AI 含义翻译**：
-   - LLM = 大语言模型（绝不译"法学硕士"/"Master of Laws"）
-   - Token / tokens = 模型 token（保留英文；绝不译"代币"/"令牌"）
-   - Transformer = Transformer 架构（保留英文；不译"变压器"）
-   - Diffusion = 扩散模型（AI 生成，不是物理扩散）
-   - Agent / Agentic = AI 智能体 / 智能体的（不译"代理人"/"中介"）
-   - Alignment = 对齐（AI 安全语境）
-   - Inference = 推理（模型生成）
-   - Reasoning = 推理（注意：与 inference 都译"推理"，必要时用"链式推理"区分 CoT；reasoning model 指 o1/o3/R1 这类思考型模型）
-   - Embedding = 嵌入向量（也可保留英文）
-   - Distillation = 知识蒸馏
-   - Hallucination = 模型幻觉
-   - Fine-tune / Fine-tuning = 微调
-   - Pretrain / Pretraining = 预训练
-   - Context window = 上下文窗口
-   - Prompt = 提示词
-   - Skill / Skills = 技能（Claude 等 Agent 框架的能力包，不译"特长"）
+2. 以下专有名词**一律保留英文原文**，不翻译不加中文括注（有中文媒体通用译名的按第 3 条处理）：
+   - 监管与官方机构：SEC（美国证券交易委员会）、Federal Reserve / Fed、FOMC（联邦公开市场委员会）、ECB（欧洲央行）、BOE（英国央行）、BOJ（日本央行）、PBOC（中国人民银行）、ESMA、OFAC、IMF、WTO、BIS（国际清算银行）、FDIC
+   - 交易所与指数：SSE、SZSE、BSE、HKEX、NYSE、Nasdaq、S&P 500、Dow Jones、CSI300、CSI 500、CSI 1000、HSI、HSCEI、Nikkei 225、TOPIX、DAX、CAC 40、FTSE 100、KOSPI、MSCI、FTSE Russell、VIX
+   - 财报与文件类型：10-K、10-Q、8-K、20-F、6-K、S-1、F-1、424B、招股书、年报、中报、季报、ESG 报告
+   - 财经媒体：Reuters、Bloomberg、WSJ、FT、CNBC、Caixin、Yicai、Securities Times（中文译名见第 3 条，不要自造）
+   - 机构与公司：按词表写法（英伟达、苹果、贵州茅台、宁德时代、中国平安、招商银行、中信证券、中金公司、中央汇金等）；原文给英文全称时，首次可双标，之后选一种保持一致
+   - 通用缩写：GDP、CPI、PPI、PMI、IPO、ADR、GDR、SOFR、MLF、OMO、LPR、QFII、QDII、FDI、SWIFT，以及任何 2-5 字母全大写缩写，默认按金融含义保留英文
+     **规则**：股票代码一字不改（600519、000858、300750、00700、AAPL、NVDA，含 .SH/.SZ/.HK 后缀照抄）
 
-2. 以下专有名词**一律保留英文原文**，不翻译不加中文括注：
-   - AI 公司：OpenAI / Anthropic / Google DeepMind / xAI / Meta AI / Mistral / DeepSeek / Cohere / HuggingFace（HF）/ Runway / ElevenLabs / Suno / Pika / Midjourney / Perplexity
-   - 模型族（举例 + 通用规则）：GPT / Claude / Gemini / Llama / Qwen / Grok / o 系列 / DeepSeek / Mistral / Mixtral / Phi / Sora / Veo / Imagen
-     **规则**：任何大模型族名、产品代号一律保留英文
-   - 模型版本号（举例 + 通用规则）：GPT-5 / Claude 4.7 / Claude Sonnet 4.6 / Llama 4 / Gemini 3 / o3 / o4 / DeepSeek-V4 / Qwen3.7
-     **规则**：版本号一字不改（包括字母数字后缀如 4o / 4.7 / 405B / V4 / R1），绝不"翻译性扩写"（不要把 "405B" 译成 "4050 亿"，不要把 "V4" 译成 "第 4 代"）
-   - 技术缩写（举例 + 通用规则）：LLM / RAG / RLHF / DPO / LoRA / QLoRA / PEFT / MoE / CoT / ReAct / KV cache / SOTA / AGI / MCP / ADK / NPU / GPU / TPU
-     **规则**：任何 2-5 字母的全大写缩写，默认按 AI/ML 含义保留英文
-   - 评测基准（举例 + 通用规则）：MMLU / GPQA / HumanEval / SWE-bench / SWE-bench Verified / AIME / HLE / ARC-AGI / ARC-AGI 2 / MT-Bench / Chatbot Arena / Aider Polyglot / LiveCodeBench
-     **规则**：以 -bench / -eval 结尾或全大写的评测名一律保留英文
-   - AI 工具/产品：Cursor / Copilot / Codex / Aider / Devin / Cline / Claude Code / Windsurf / Zed / v0 / Bolt / Lovable / Replit Agent
-   - Agent 框架：LangChain / LangGraph / LlamaIndex / CrewAI / AutoGen / Pydantic AI / Vercel AI SDK / DSPy
-   - 推理/部署：Ollama / vLLM / SGLang / TensorRT / Triton / CUDA / ROCm
-   - 通用技术：API / SDK / CLI / IDE / SaaS / CDN / SSO / OAuth / JWT / WebSocket / SSE / gRPC
+3. 海外机构与人物**统一大陆译名**，不造新译名、不保留英文拼写、不用港台译名：
+   - Reuters = 路透社（不写“路透集团”“英国路透通讯社”）
+   - Bloomberg = 彭博；WSJ = 华尔街日报；FT = 金融时报；CNBC = 美国消费者新闻与商业频道（一般写 CNBC 即可）
+   - SEC = 美国证券交易委员会（全称 U.S. Securities and Exchange Commission，不译“证券交易协会”“证管会”）
+   - 海外央行负责人与财经人物：鲍威尔（Jerome Powell）、沃什（Kevin Warsh）、拉加德（Christine Lagarde）、贝利（Andrew Bailey）、植田和男（Kazuo Ueda）——用大陆通行译名，不写英文原名
+   - 财报术语：earnings call = 财报电话会；Non-GAAP 照抄原文口径，不换算成 GAAP，也不把调整项当成经营事实
 
-3. 中国厂商**优先用官方中文品牌名**（首次出现可双标"千问（Qwen3）"，后续选一种保持一致）：
-   - 千问（Qwen）/ 文心一言 / 智谱（GLM）/ 月之暗面（Kimi）/ 深度求索（DeepSeek）/ 阶跃星辰（Step）/ 零一万物（Yi）/ 百川 / 豆包（字节）/ 混元（腾讯）/ 可灵（Kling，快手）/ 即梦（Jimeng，字节）/ MiniMax（不译）/ 美团 LongCat / 昆仑万维 Skywork / 面壁 MiniCPM / 华为昇腾 / 寒武纪
+4. 阶段口径（标题、摘要与证据强度都必须分档，不许把早期阶段写成已落地）：
+   - 传闻/意向：匿名消息、“据悉”“拟”“正在考虑”，未证实 → 写“传”“或”“据外媒”，不给确定语气
+   - 征求意见/草案：监管公开征求意见 → 写“征求意见稿”，不写“正式发布”“开始实施”
+   - 审议通过/正式发布：文件、规则、公告已公布 → 可写“发布”“公布”“宣布”
+   - 获批/注册生效：拿到批文或注册结果 → 可写“获批”“注册生效”
+   - 生效执行/实施：有明确施行日期或以公告日为准 → 可写“自 X 日起施行”；没有日期不写“已实施”
+   - 业绩阶段同理：业绩预告/快报是预计数，正式报告才是确定数；不得把预告数写成已实现数，不得把业绩承诺写成已完成
 
-4. 代码 / 命令 / URL / 数字单位 **一字不改**保留：
+5. 预期差口径（原文给了预期才谈预期差）：
+   - 数据与业绩的价值在“相对预期”：大幅超预期的披露高于符合预期的披露；不及预期的事实是“低于共识”，不是“没有发生”
+   - 原文只给数字、不给预期值与前值时，只写数字本身，不写“大超预期”“爆表”“不及预期”
+   - 原文给了预期值与前值，照抄原文数字，不自行重算同比、环比、涨跌幅；单位、币种、口径（季调/未季调）必须与原文一致
+
+6. 中国机构优先用国内通行全称，简称首次出现可双标，之后选一种保持一致：
+   - 中国人民银行（央行/PBOC）、中国证监会、国家金融监督管理总局（金融监管总局）、国家外汇管理局、国家统计局、海关总署、财政部、国家发展改革委、商务部、国务院
+   - 上海证券交易所（上交所）、深圳证券交易所（深交所）、北京证券交易所（北交所）、香港交易所（港交所）
+   - 中央汇金、工商银行、招商银行、中国平安、中信证券、中金公司、东方财富等机构与公司按词表写法
+
+7. 代码 / 命令 / URL / 数字单位 **一字不改**保留：
    - 反引号代码 `code` 不翻译
-   - 命令如 /code-review、pip install、npm run 不译（不要译"代码审查"）
+   - 命令、接口名、脚本名不译（不要译成中文说法）
    - URL 原样
-   - 数字+单位：8k context / 175B params / 3.5x speedup / $3 per M tokens / 99.9%
-   - 金额、参数量、比例、区间必须保留原文的阿拉伯数字和单位；不要把 $10B-$100B 改写成“数百亿至数千亿美元”等中文数量词
+   - 数字+单位：3.25%、0.5 个百分点、5bp、10 年期、2 万亿元、$10B、99.9%
+   - 金额、比例、区间必须保留原文的阿拉伯数字和单位；不要把 $10B-$100B 改写成“数百亿至数千亿美元”等中文数量词；不自行换算币种、单位或百分点与基点的互换

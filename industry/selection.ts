@@ -9,7 +9,9 @@ export const SELECTION = {
    *   T1 官方一手（官网、官方博客、机构）· T1_5 官方账号、准官方创作者 · T2 媒体与个人
    * 分级 EXCLUDE_MP 以及这里没有列出的分级，不参与精选评分（只进“全部动态”）。
    */
-  thresholds: { T1: 60, T1_5: 65, T2: 76 } as Record<string, number>,
+  thresholds: { T1: 42, T1_5: 48, T2: 55 } as Record<string, number>,
+  // TODO(P4): 上线前必须用 100-200 条人工标注 gold 样本经 scripts/eval-selection.ts 重
+  // 校准（LLM 换成 zero-flash + 分类体系换成财经 7 轴后旧阈值 {60,65,76} 系统性偏低）。
   /**
    * 没入选、但平均分高于这个数的资料，也用精选的写法（内容理解：标题、摘要、推荐理由、标签）来写，
    * 其余用更便宜的“标题摘要翻译”。

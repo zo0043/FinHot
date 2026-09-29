@@ -29,6 +29,8 @@ const NAV: Array<{ group: string; items: Array<{ to: string; label: string; coun
     items: [
       { to: "/admin/content", label: "内容诊断" },
       { to: "/admin/sources", label: "信源", count: "sources", tone: "bad" },
+      // The Codex reset monitor is an AI-only module (industry/features.ts): its reader page and its
+      // cron are gone, the admin page and its routes stay over the retained backend records.
       ...(FEATURES.codexResetMonitor ? [{ to: "/admin/monitor", label: "Codex 重置", count: "monitor" as const, tone: "accent" as const }] : []),
       { to: "/admin/feedback", label: "反馈", count: "feedback", tone: "accent" },
     ],
