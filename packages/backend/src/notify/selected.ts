@@ -6,7 +6,9 @@ import { sha256 } from "../lib/ids.ts";
 import { itemUrl } from "../publication/links.ts";
 import { CATEGORY_LABELS, type CategoryKey } from "@aihot/contracts/taxonomy";
 import { deliverContent } from "./deliver.ts";
+import { barkEnabled, pushBark } from "./bark.ts";
 import { SITE } from "@aihot/industry/site";
+import { SELECTION } from "@aihot/industry/selection";
 
 const MAX_AGE_MS = 12 * 3600_000;
 const LEASE_MS = 10 * 60_000;
@@ -25,6 +27,7 @@ interface Row {
   category: CategoryKey | null;
   source_name: string;
   url: string;
+  score: number | null;
   timeline_at: Date;
   discovered_at: Date;
   visible_after: Date | null;
@@ -58,7 +61,7 @@ function card(r: Row) {
 
 export async function pushSelected(articleId: string, now = new Date()): Promise<PushOutcome> {
   const [r] = await sql<Row[]>`
-    SELECT p.article_id, p.selected, p.visibility, p.title, p.summary, p.reason, p.category, s.name AS source_name, p.url,
+    SELECT p.article_id, p.selected, p.visibility, p.title, p.summary, p.reason, p.category, s.name AS source_name, p.url, p.score,
            p.timeline_at, p.discovered_at, p.visible_after, p.backfill, p.fact_id,
            coalesce((o.fields->>'silent')::boolean, false) AS silent
     FROM publications p JOIN sources s ON s.id = p.source_id LEFT JOIN editorial_overrides o ON o.article_id = p.article_id
@@ -79,5 +82,25 @@ export async function pushSelected(articleId: string, now = new Date()): Promise
 
   const dedupeKey = r.fact_id ? `selected:fact:${r.fact_id}` : `selected:article:${articleId}`;
   const targets = await deliverContent({ subjectKind: "selected", subjectId: articleId, dedupeKey, contentAt: r.discovered_at, card: card(r) });
-  return { status: targets.some((t) => t.status === "sent") ? "pushed" : "skipped", targets, reason: targets.length ? undefined : "no new target" };
+  const pushed = targets.some((t) => t.status === "sent");
+  if (pushed) await maybePushBark(r);
+  return { status: pushed ? "pushed" : "skipped", targets, reason: targets.length ? undefined : "no new target" };
+}
+
+/**
+ * Selected-item Bark push (BARK_PUSH_SELECTED=off|t1|all，默认 t1)。t1 = only items at the T2 bar (top
+ * selection); all = every selected item. Best-effort: by the time this runs the Feishu card has already
+ * got out, so a failed phone push is logged and swallowed.
+ */
+const barkPushMode = () => process.env.BARK_PUSH_SELECTED ?? "t1";
+
+async function maybePushBark(r: Row): Promise<void> {
+  if (!barkEnabled()) return;
+  const mode = barkPushMode();
+  if (mode === "off") return;
+  if (mode === "t1" && (r.score ?? 0) < SELECTION.thresholds.T2) return;
+  const body = [r.summary?.slice(0, 120), r.reason ? `理由：${r.reason.slice(0, 60)}` : null, `来源：${r.source_name}`].filter(Boolean).join("\n");
+  await pushBark(`📌 ${r.title}`, body, { group: "FinHot精选", url: itemUrl(r.article_id) }).catch((error) => {
+    console.log(JSON.stringify({ level: "warn", msg: "Bark 入选推送失败（不影响飞书卡片）", articleId: r.article_id, error: String(error) }));
+  });
 }

@@ -82,6 +82,35 @@ export async function collectFindings(now = Date.now()): Promise<Finding[]> {
     }
   }
 
+  // A source that keeps failing: readers lose that source, and only the owner can judge the source itself
+  // (taken down, paywalled, redesigned). Streak counts failures since the last success, so a flaky source
+  // only shows up while it is actually failing.
+  const failingSources = await sql<{ name: string; streak: number; error: string | null; last: Date }[]>`
+    SELECT s.name, f.streak, f.error, f.last
+    FROM sources s JOIN LATERAL (
+      SELECT count(*)::int AS streak, (array_agg(r.error ORDER BY r.started_at DESC))[1] AS error, max(r.started_at) AS last
+      FROM fetch_runs r
+      WHERE r.source_id = s.id AND r.status = 'failed' AND r.started_at > coalesce((
+        SELECT max(f2.started_at) FROM fetch_runs f2 WHERE f2.source_id = s.id AND f2.status = 'ok'
+      ), '-infinity'::timestamptz)
+    ) f ON true
+    WHERE s.enabled AND f.streak >= 3 AND f.last > now() - interval '2 days'
+    ORDER BY f.last DESC LIMIT 4`;
+  if (failingSources.length) {
+    const shown = failingSources.slice(0, 3);
+    const more = failingSources.length - shown.length;
+    out.push({
+      key: "sources.failing",
+      level: "today",
+      title: `有 ${failingSources.length} 个信源连续抓取失败`,
+      impact: `这些信源的内容不会再出现在网站上：${shown.map((s) => s.name).join("、")}${more > 0 ? ` 等（共 ${failingSources.length} 个）` : ""}`,
+      heals: "不会，原因不清除就一直失败",
+      action: "转给 AI 排查；如果是信源本身失效（关站、改版、要付费），在后台停用该源或换地址",
+      detail: shown.map((s) => `${s.name}：连续 ${s.streak} 次失败（最近 ${beijingStamp(s.last)}）${s.error ? `：${s.error.slice(0, 120)}` : ""}`).join("；"),
+      since: failingSources[0]!.last,
+    });
+  }
+
   // ---- Money, and things only the owner can do --------------------------------------------------
   out.push(...(await providerFindings()));
 

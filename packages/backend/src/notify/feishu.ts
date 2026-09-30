@@ -7,6 +7,7 @@ import path from "node:path";
 import { beijingDate, beijingTime } from "@aihot/contracts/time";
 import { config, credential } from "../config.ts";
 import { sql } from "../db.ts";
+import { barkEnabled, pushBark } from "./bark.ts";
 
 const API = "https://open.feishu.cn/open-apis";
 
@@ -106,18 +107,42 @@ export function formatRecovery(title: string, since: Date, now: number): { title
   return { title: `✅ 已恢复：${title}`, lines: [`持续 ${duration(now - since.getTime())}（${beijingStamp(since)} 起）`] };
 }
 
-/** Operations alert: the alert chat, falling back to the internal feedback chat — never a content group. */
+/**
+ * Operations alert: the alert chat, falling back to the internal feedback chat — never a content group.
+ * Bark is a second, parallel channel (iPhone push, BARK_KEY): no app credential needed, so it is the only
+ * channel here while Feishu is off. One channel succeeding counts as sent; if none does, the throw lands
+ * on the caller (operations/alerts.ts) and the job retries — a lost alert is never silent.
+ */
 export async function sendAlert(title: string, lines: string[]): Promise<"sent" | "disabled"> {
   // Production needs no label; any other environment that has sending on says which one it is.
   const text = `${config.environmentName === "production" ? "" : `【${config.environmentName}】`}${title}\n${lines.join("\n")}`;
-  if (!feishuInternalEnabled()) {
-    console.log(JSON.stringify({ level: "warn", msg: "alert (not sent: FEISHU_INTERNAL_ENABLED is off)", title, lines }));
-    return "disabled";
+  const critical = title.includes("🔴"); // Site-stopped alerts need the phone to beep: alarm sound + critical level.
+  const failures: unknown[] = [];
+  let sent = false;
+  if (feishuInternalEnabled()) {
+    const chat = credential("integrations", "FEISHU_ALERT_CHAT_ID") ?? credential("integrations", "FEISHU_INTERNAL_CHAT_ID");
+    if (chat) {
+      try {
+        await sendToChat(chat, "text", { text });
+        sent = true;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
   }
-  const chat = credential("integrations", "FEISHU_ALERT_CHAT_ID") ?? credential("integrations", "FEISHU_INTERNAL_CHAT_ID");
-  if (!chat) return "disabled";
-  await sendToChat(chat, "text", { text });
-  return "sent";
+  if (barkEnabled()) {
+    try {
+      await pushBark(title, lines.join("\n"), { group: "FinHot告警", sound: critical ? "alarm" : "news", level: critical ? 100 : undefined });
+      sent = true;
+    } catch (error) {
+      failures.push(error);
+      console.log(JSON.stringify({ level: "warn", msg: "alert (Bark 推送失败，按发送失败处理)", title, error: String(error) }));
+    }
+  }
+  if (sent) return "sent";
+  if (failures.length) throw failures[0];
+  console.log(JSON.stringify({ level: "warn", msg: "alert (not sent: FEISHU_INTERNAL_ENABLED is off and BARK_KEY is not set)", title, lines }));
+  return "disabled";
 }
 
 /** A screenshot that still cannot be uploaded this long after the feedback is given up: the text goes without it. */

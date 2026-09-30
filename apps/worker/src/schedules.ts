@@ -20,6 +20,7 @@ import { backupConfigured, runBackup } from "@aihot/backend/operations/backup";
 import { sourceHealthWeekly } from "@aihot/backend/operations/reports";
 import { markStalePendingReceipts } from "@aihot/backend/providers/receipts";
 import { markStaleDeliveries } from "@aihot/backend/notify/deliver";
+import { barkEnabled, sendBarkDailyDigest } from "@aihot/backend/notify/bark";
 
 interface Scheduled {
   name: string;
@@ -39,6 +40,8 @@ export const SCHEDULES: Scheduled[] = [
   { name: "stories.status", cron: "7 * * * *", run: refreshStoryStatuses },
   { name: "stories.links", cron: "12 * * * *", run: linkRelatedStories },
   { name: "reports.daily", cron: "0 8 * * *", missed: "once", run: () => composeDaily(beijingDate(Date.now())) },
+  // Daily selection pushed to the phone (off unless BARK_KEY is set): five minutes behind the report.
+  ...(barkEnabled() ? [{ name: "notify.bark-daily", cron: "5 8 * * *", missed: "once" as const, run: () => sendBarkDailyDigest() }] : []),
   { name: "reports.weekly", cron: "0 10 * * 1", missed: "once", run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
   {
     name: "reports.monthly",
