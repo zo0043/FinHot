@@ -8,6 +8,7 @@ import { beijingDate } from "@aihot/contracts/time";
 import { SITE } from "@aihot/industry/site";
 import { config, credential } from "../config.ts";
 import { sql } from "../db.ts";
+import { boardLine, boardSnapshot } from "../market/daily.ts";
 
 const TITLE_MAX = 40; // 标题上限：通知栏放不下，URL 也会过长
 const BODY_DEFAULT_MAX = 400; // 正文默认上限（告警）；日报等长文显式传更大的上限
@@ -77,10 +78,11 @@ export async function sendBarkDailyDigest(now = Date.now()): Promise<{ pushed: b
   }
   const [, mm, dd] = date.split("-");
   const dateLabel = `${Number(mm)}月${Number(dd)}日`;
+  const board = boardLine(await boardSnapshot(date)); // 昨天收盘盘面，没有就什么都不加
   const lines = items.map(
     (item, i) => `${i + 1}. ${item.title ?? "（无标题）"}（${item.sourceName ?? "未知来源"} ${item.score == null ? "—" : `${Math.round(item.score)} 分`}）`,
   );
-  const body = [content?.lead?.lead?.trim(), "", ...lines, "", `${config.siteUrl}/daily/${date}`].filter(Boolean).join("\n");
+  const body = [content?.lead?.lead?.trim(), "", `盘面：${board}`, ...lines, "", `${config.siteUrl}/daily/${date}`].filter(Boolean).join("\n");
   await pushBark(`${SITE.name} 每日精选 ${dateLabel}`, body, { group: "FinHot", bodyMax: 900 });
   return { pushed: true, items: items.length };
 }

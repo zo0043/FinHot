@@ -20,6 +20,7 @@ import { backupConfigured, runBackup } from "@aihot/backend/operations/backup";
 import { sourceHealthWeekly } from "@aihot/backend/operations/reports";
 import { markStalePendingReceipts } from "@aihot/backend/providers/receipts";
 import { markStaleDeliveries } from "@aihot/backend/notify/deliver";
+import { syncMarketDaily } from "@aihot/backend/market/daily";
 import { barkEnabled, sendBarkDailyDigest } from "@aihot/backend/notify/bark";
 
 interface Scheduled {
@@ -53,6 +54,8 @@ export const SCHEDULES: Scheduled[] = [
     },
   },
   { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() },
+  // 日频市场数据：工作日收盘后（15:35 北京时间）拉一次；非交易日按接口时间戳判掉（missed once 不求补）
+  { name: "market.daily", cron: "35 15 * * *", missed: "once", run: () => syncMarketDaily() },
   { name: "ops.retention", cron: "30 3 * * *", missed: "once", run: () => dailyRetention() },
   { name: "sources.icons", cron: "40 4 * * *", missed: "once", run: () => refreshSourceIcons() },
   // IndexNow for new indexable pages (off unless INDEXNOW_SUBMIT_ENABLED).
