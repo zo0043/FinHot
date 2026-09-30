@@ -91,6 +91,8 @@ CREATE INDEX market_daily_key_date_idx ON market_daily (index_key, trade_date DE
 
 ### P0 稳定：让断流不再静默 【✅ 已完成 2026-07，提交 b206cad】
 
+> **2026-07 已部署上线**：本机即生产机（`sudo docker compose`），0039 迁移已跑、worker/api/web 三容器已滚动重建；容器内 `BARK_KEY`/`BARK_PUSH_SELECTED=t1`/`ALERT_QUIET_MINUTES=120` 已确认存在，容器内真实推送返回 `sent`（部署验证）。gate：collect/analyze 动一次 cron 触发（`commerce.daily` 09:00、`market.daily` 15:35）。
+
 Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路、而飞书在 `.env` 里是全关的）：
 
 | 任务 | 位置 | 状态 |
@@ -99,6 +101,7 @@ Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路�
 | 每日精选摘要 | `sendBarkDailyDigest` + `notify.bark-daily` cron 08:05（取当早日报） | ✅ |
 | 入选实时推送 | `notify/selected.ts` + `BARK_PUSH_SELECTED=t1/all/off` | ✅ 默认只推最高门槛 |
 | 行情健康告警 | `operations/alerts.ts` | ✅ market_daily 连续 2 交易日未更新 → today 级 |
+| 部署验证 | 生产机 `sudo docker compose` | ✅ 0039 迁移已跑，worker/api/web 已滚动重建，容器内真实推送 sent |
 | 静默窗口收紧 | `.env` | ✅ `ALERT_QUIET_MINUTES=120` |
 | 源级失败告警 | `operations/alerts.ts` | ✅ 自上次成功算连续 ≥3 次（2 天内），today 级 |
 | 网关 failover | litellm 服务端 | ⏸ 用户拍板：暂不动，后面自己配 |
