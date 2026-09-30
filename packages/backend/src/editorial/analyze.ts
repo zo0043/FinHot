@@ -27,6 +27,7 @@ import {
 } from "./writing.ts";
 import { CATEGORY_BY_ITEM_TYPE, CATEGORY_GUIDE, CATEGORY_TAGS, deriveCategory, ENTITIES, ENTITY_TAGS, ITEM_TYPES, normalizeTags, TOPIC_TAGS } from "./vocabulary.ts";
 import { promptText, promptVersion } from "./prompts.ts";
+import { judgeDirection } from "./direction.ts";
 
 export { buildMaterial, loadAnalyzeInput, type AnalyzeInputArticle };
 
@@ -36,6 +37,7 @@ export const PROMPT_VERSIONS = {
   understand: promptVersion("understand"),
   summarize: promptVersion("summarize-article", "summarize-article-empty", "summarize-short-post", "summarize-short-post-quoted", "summarize-long-post", "summarize-long-post-quoted", "identity-context"),
   structure: promptVersion("structure"),
+  directions: promptVersion("directions"),
 } as const;
 /** Every step's prompt, as stored on each judgement. */
 export const ANALYZE_PROMPT_VERSION = Object.values(PROMPT_VERSIONS).join("+");
@@ -423,8 +425,18 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   if (waitsForPage(input)) return { analysisId: null, stale: false, needsBody: true, output: null, receiptIds: [], reused: true };
   const run = await runAnalysis(input, opts);
   const out = normalizeAnalysis(run);
+  // 事件方向步：只对入选事件跑。失败不拖垮主流程——无方向数据的文章照常入库。
+  const direction = out.selected
+    ? await judgeDirection({ title: out.titleZh, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
+        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, model: d.model, receiptId: d.receiptId }),
+        (error: unknown) => {
+          console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，无方向数据）", articleId, error: String(error) }));
+          return null;
+        },
+      )
+    : null;
   const receiptIds = [
-    run.prefilter.receiptId, ...(run.scores?.receiptIds ?? []), ...(run.writing?.receiptIds ?? []), ...(run.structure ? [run.structure.receiptId] : []),
+    run.prefilter.receiptId, ...(run.scores?.receiptIds ?? []), ...(run.writing?.receiptIds ?? []), ...(run.structure ? [run.structure.receiptId] : []), ...(direction ? [direction.receiptId] : []),
   ];
   const w = run.writing;
   const detail = {
@@ -433,16 +445,17 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     ...(w ? { writer: w.kind, writerModel: w.model, itemType: w.itemType ?? null, authorRole: w.authorRole ?? null } : {}),
     ...(w?.identityGuard?.outcome === "fallback" ? { identityGuard: w.identityGuard } : {}),
     fact: out.fact,
+    ...(direction ? { direction } : {}),
   };
   const committed = await sql.begin(async (tx) => {
     const [current] = await tx<{ revision: number }[]>`SELECT revision FROM articles WHERE id = ${articleId} FOR UPDATE`;
     const stale = !current || current.revision !== input.revision;
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
-        subjects, title_zh, summary_zh, reason_zh, score, selected, output)
+        subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, output)
       VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${ANALYZE_PROMPT_VERSION}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
-        ${out.score}, ${out.selected}, ${tx.json(detail as never)})
+        ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
     if (!stale) {
