@@ -30,6 +30,9 @@ export const CATEGORY_TAGS = [
   "行情/异动", "政策/监管", "公司公告", "资本运作", "数据发布", "研究/解读", "人物观点", "行业动态", "其他",
 ] as const;
 
+export type CategoryTag = (typeof CATEGORY_TAGS)[number];
+export type CategoryKey = (typeof CATEGORIES)[number]["key"];
+
 /** 可选的主题标签。 */
 export const TOPIC_TAGS = [
   "人工智能", "半导体", "新能源", "医药生物", "金融", "消费", "房地产", "汽车", "债券", "汇率", "黄金", "原油商品", "美联储", "关税贸易", "互联网",
@@ -74,6 +77,37 @@ export const CATEGORY_BY_ITEM_TYPE: Readonly<Record<string, string>> = {
   company_filing: "公司公告", capital_deal: "资本运作", policy_regulation: "政策/监管", market_shift: "行情/异动",
   data_release: "数据发布", opinion_view: "人物观点", research_explainer: "研究/解读",
 };
+
+/**
+ * 分类标签 → 类别 key（CATEGORIES 的 key）。structure 步给不出 category 时，靠它把标签兜底成类别：
+ * 「其他」和没有对应类别的标签统一进 industry（CATEGORIES 注释里规定的兜底类别）。
+ */
+export const CATEGORY_BY_TAG: Readonly<Record<CategoryTag, CategoryKey>> = {
+  "行情/异动": "market",
+  "政策/监管": "macro",
+  "公司公告": "a-share",
+  "资本运作": "a-share",
+  "数据发布": "research",
+  "研究/解读": "research",
+  "人物观点": "people",
+  "行业动态": "industry",
+  "其他": "industry",
+};
+
+/**
+ * category 的兜底链（analyze.ts 的 structure 步 category 允许模型失败，历史上约八成样本走到这里）：
+ *   1. structure 步直接给出的 category key（模型做对了，最可信）；
+ *   2. 内容类型 → 分类标签（CATEGORY_BY_ITEM_TYPE）→ 类别 key；
+ *   3. 已打上的标签里第一个分类标签 → 类别 key；
+ * 都落空返回 null（旧数据靠 deriveCategory 重新写入才会补齐，这里只对新分析兜底）。
+ */
+export function deriveCategory(structureCategory: string | null, itemType: string | undefined, tags: readonly string[]): CategoryKey | null {
+  if (structureCategory) return structureCategory as CategoryKey;
+  const fromType = itemType && CATEGORY_BY_ITEM_TYPE[itemType];
+  if (fromType) return CATEGORY_BY_TAG[fromType as CategoryTag] ?? null;
+  for (const tag of tags) if (tag in CATEGORY_BY_TAG) return CATEGORY_BY_TAG[tag as CategoryTag];
+  return null;
+}
 
 // ── 公司与主体 ──────────────────────────────────────────────────────────────────────────
 
