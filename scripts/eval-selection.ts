@@ -3,7 +3,7 @@
 // --models, the two scores deciding against the source tier's threshold — and is compared with your
 // decision. A threshold sweep shows what another threshold would have done. The format of the gold file
 // is in docs/selection.md (industry/gold.example.jsonl has two made-up cases).
-// Usage: node --env-file=.env scripts/eval-selection.ts --gold .data/gold.jsonl [--models default,deepseek-flash] [--n 200] [--label "..."]
+// Usage: node --env-file=.env scripts/eval-selection.ts --gold .data/gold.jsonl [--models default,deepseek-flash] [--n 200] [--concurrency 2] [--attempts 3] [--label "..."]
 // Receipts make re-runs free; "either" cases are excluded from decisive metrics. Each run is also
 // imported into SelectBench (admin → SelectBench) with every case, unless --no-import is given.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -20,7 +20,8 @@ const { values } = parseArgs({
     models: { type: "string", default: "default" },
     n: { type: "string", default: "200" },
     split: { type: "string", default: "all" },
-    concurrency: { type: "string", default: "6" },
+    concurrency: { type: "string", default: "2" },
+    attempts: { type: "string", default: "3" },
     seed: { type: "string", default: "7" },
     label: { type: "string" },
     "no-import": { type: "boolean", default: false },
@@ -84,14 +85,22 @@ async function pmap<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): 
 const report: Record<string, unknown> = {};
 for (const model of values.models!.split(",")) {
   const started = Date.now();
+  const attempts = Math.max(1, Number(values.attempts));
   const results = await pmap(sample, Number(values.concurrency), async (r) => {
-    try {
-      const res = await runAnalysis(toInput(r), { scoreModel: model, stages: "selection" });
-      const out = normalizeAnalysis(res);
-      return { r, out, receiptIds: [res.prefilter.receiptId, ...(res.scores?.receiptIds ?? [])], error: null as string | null };
-    } catch (error) {
-      return { r, out: null, receiptIds: [] as number[], error: String(error).slice(0, 200) };
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const res = await runAnalysis(toInput(r), { scoreModel: model, stages: "selection" });
+        const out = normalizeAnalysis(res);
+        return { r, out, receiptIds: [res.prefilter.receiptId, ...(res.scores?.receiptIds ?? [])], error: null as string | null };
+      } catch (error) {
+        lastError = error;
+        // Unusable/failed output: the receipt layer rejects the bad response, so the next attempt
+        // pays for a fresh answer; back off a little (gateway overload is the usual cause).
+        if (attempt < attempts) await new Promise((done) => setTimeout(done, 10_000 * attempt));
+      }
     }
+    return { r, out: null, receiptIds: [] as number[], error: String(lastError).slice(0, 200) };
   });
   let tp = 0, fp = 0, fn = 0, tn = 0, either = 0, errors = 0;
   const mistakes: Array<Record<string, unknown>> = [];

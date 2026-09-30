@@ -246,14 +246,23 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
     ? reasoning
     : content;
   let parsed: z.infer<S>;
-  try {
-    parsed = opts.schema.parse(opts.parse ? opts.parse(candidate) : extractJson(candidate));
-  } catch (error) {
-    // Unusable output: record it and let a later attempt pay for a fresh answer.
-    await rejectReceivedResponse(receipt.receiptId, `unusable output: ${String(error).slice(0, 500)}`);
-    throw new ModelOutputError(`Model ${opts.model} returned unusable output for ${opts.subject}: ${String(error).slice(0, 300)}`);
+  let parseError: unknown = null;
+  // Some gateways put a malformed/partial JSON shell in message.content while the complete
+  // answer is still present in reasoning_content. Try the normal answer first, then the reasoning
+  // trace as a compatibility fallback. We still validate both through the caller's schema; never
+  // infer or repair numeric values here.
+  const candidates = [candidate, reasoning].filter((value, index, all) => value.trim() && all.indexOf(value) === index);
+  for (const text of candidates) {
+    try {
+      parsed = opts.schema.parse(opts.parse ? opts.parse(text) : extractJson(text));
+      return { data: parsed, receiptId: receipt.receiptId, reused: receipt.reused, model: spec.key, usage: response.usage ?? null };
+    } catch (error) {
+      parseError = error;
+    }
   }
-  return { data: parsed, receiptId: receipt.receiptId, reused: receipt.reused, model: spec.key, usage: response.usage ?? null };
+  // Unusable output: record it and let a later attempt pay for a fresh answer.
+  await rejectReceivedResponse(receipt.receiptId, `unusable output: ${String(parseError).slice(0, 500)}`);
+  throw new ModelOutputError(`Model ${opts.model} returned unusable output for ${opts.subject}: ${String(parseError).slice(0, 300)}`);
 }
 
 export async function markReceiptsCompleted(ids: number[]): Promise<void> {
