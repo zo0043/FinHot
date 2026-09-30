@@ -121,21 +121,13 @@ Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路�
 
 **验收**：新入库 category 非空率 ≥ 95%（旧数据不回刷，自然更替）；摘要中位长度 ≥ 250 字。
 
-### P2 "对你重要"：评分标准 + 阈值校准（~1-2 天代码 + 你的 1-3 天标注）
+### P2 “对你重要”：评分标准 + 阈值校准 【进行中：口径已写入并上线 2026-07】
 
-这是**唯一需要你提供 KnowHow** 的阶段，也是降噪真正的杠杆。
+唯一需要 KnowHow 的阶段，按下单用户口径完成：
 
-1. **投资口径访谈**（我出问卷，你答 ~10 个题）：
-   - 交易什么：个股/ETF/指数？周期：日内/波段（天-周）/中长线？
-   - 重点板块：从 `sectors.ts` 词表圈 5-8 个
-   - 什么事件会让你动手（举 3-5 个真实例子）→ 写进 `selection-score.md` "必须正常评价"
-   - 什么是纯噪声（举 3-5 个）→ 写进 "必须压住的噪声"
-   - 重点人物/公司核对（`topics.json` + `ENTITY_TAGS` 现有 43 家公司是否贴合你）
-2. **按 AGENTS.md 规则改评分提示词**：保留五轴结构、权重表、安全边界，只替换"什么算重要/噪声"的例子。
-3. **gold 集**：新脚本 `scripts/export-gold.ts` 从生产池按分层（源 tier × 分数段 × 类别）抽 150-200 条 → `.data/gold-candidates.jsonl` → 你在后台/文件里标 `select|reject` → `scripts/eval-selection.ts --gold .data/gold.jsonl`（现成，回执免费重跑）→ 读 SelectBench 前后对比 → 重定 `selection.ts` 的 `{T1,T1_5,T2}` 与 `understandFloor`。
-4. **每次改提示词前后都跑一遍 gold 回归**（变成固定纪律，防 prompt 回归）。
-
-**验收**：50 条 holdout 上 precision/recall 不劣于旧门槛且研报层 recall 提升；你抽看 20 条 must-watch，≥ 80% 认同"值得看"。
+1. **口径已写入** `industry/prompts/selection-score.md`：中长线基本面读者（不做日内）、14 个重点板块、政策组合拳/国家队动向为最高档锚点、龙虎榜/游资等短线资金噪音压住、A 股无传导海外新闻压低。版本为内容哈希自动管理，已部署生产。
+2. **gold 标注（服务器上跑，等标注员）**：`node --env-file=.env scripts/export-gold.ts`（tier × 分数段 × category 分层 200 条 → `.data/gold-candidates.jsonl`）→ 人工在 `gold.decision` 标 select/reject → `node --env-file=.env scripts/eval-selection.ts --gold .data/gold.jsonl` → 读 SelectBench 对比重定 `selection.ts` 的 `{T1,T1_5,T2}`。
+3. 今后每次改提示词前后各跑一次 gold（防 prompt 回归）。
 
 ### P3 方向轴 + 结果数据（~2-3 天，之后开始攒数据）
 
