@@ -148,11 +148,11 @@
           "initialBackfillLimit": 20
         }
       },
-      "tier": "T2",
+      "tier": "T1_5",
       "first_party": false,
       "owner_entity_id": null,
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 60,
       "tags": [
         "A股",
         "研报"
@@ -1079,7 +1079,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "web-shfe-notice",
@@ -1438,7 +1438,7 @@
       "tier": "T1",
       "first_party": true,
       "owner_entity_id": null,
-      "participation_mode": "editorial",
+      "participation_mode": "isolated",
       "interval_minutes": 30,
       "tags": [
         "全球",
@@ -1447,7 +1447,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-cnbc-markets",
@@ -1563,7 +1563,7 @@
       "tier": "T2",
       "first_party": false,
       "owner_entity_id": null,
-      "participation_mode": "editorial",
+      "participation_mode": "isolated",
       "interval_minutes": 120,
       "tags": [
         "全球",
@@ -1571,7 +1571,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-gn-jp",
@@ -1595,7 +1595,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-gn-kr",
@@ -1619,7 +1619,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "web-ofac-recent",
@@ -1855,7 +1855,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "web-guba-600519",
