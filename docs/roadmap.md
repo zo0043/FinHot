@@ -22,7 +22,7 @@ FinHot 的交易价值只在**理解层**可赢：速度（毫秒级竞争）与
 | 1 | **84% 精选无 category**。structure 步 `category: z.enum(...).nullable().catch(null)`（`analyze.ts:124`），失败静默变 null；`normalizeAnalysis` 里 `category: run.structure?.category ?? null`（`analyze.ts:395`）**没有任何兜底** | `editorial/analyze.ts` | 站点筛选栏、日报分节、主题页大面积空 |
 | 2 | **评分输出只有 `attentionScore` 一个字段**（`selection-score.md` 末尾契约），五轴（sig/nov/cred/reson/act）是内部计算不落库；**无方向/情绪轴** | `industry/prompts/selection-score.md` | 结构上产生不了方向信号，调参改不出来 |
 | 3 | **embeddings 地基已存在**：`0006_embeddings.sql`（`embeddings` 表，`real[]`，无 pgvector，注释明说"recall scans a bounded recent window"）+ `providers/embeddings.ts` 的 `ensureEmbeddings(kind: fact\|article\|story)`，供事件归组召回用。**但当前 `.env` 未配 `EMBEDDING_*`**（"不填也能跑，只是归组少一路线索"） | `database/migrations/0006_embeddings.sql`、`providers/embeddings.ts` | "历史相似事件"不是从零建，是**启用 + 去掉时间窗限制** |
-| 4 | **告警框架已存在**：`operations/alerts.ts` 的 `collectFindings` 三级（now/today/digest），`ops.alerts` cron `*/10` 分钟，飞书发送走 `notify/feishu.ts`。但默认静默窗口 `ALERT_QUIET_MINUTES=360`（6 小时）太长；**且当前 `.env` 里 `FEISHU_INTERNAL_ENABLED=false`、`FEISHU_ALERT_CHAT_ID` 未配**——告警即使触发也发不出去 | `operations/alerts.ts`、`apps/worker/src/schedules.ts`、`.env` | "静默断流"的根因之一：飞书通道根本没通 |
+| 4 | **告警框架已存在**：`operations/alerts.ts` 的 `collectFindings` 三级（now/today/digest），`ops.alerts` cron `*/10` 分钟，发送走 `notify/feishu.ts` 的 `sendAlert`。但默认静默窗口 `ALERT_QUIET_MINUTES=360`（6 小时）太长；且 `.env` 里 `FEISHU_INTERNAL_ENABLED=false`、`FEISHU_ALERT_CHAT_ID` 未配——告警即使触发也发不出去 | `operations/alerts.ts`、`apps/worker/src/schedules.ts`、`.env` | “静默断流”的根因之一：告警通道根本没通。**用户 2026-07 拍板用 Bark 替代飞书做告警/推送通道** |
 | 5 | **评测地基已存在**：`scripts/eval-selection.ts`（跑真实 analyze 流程 + 阈值扫描 + SelectBench 导入）、gold 格式（`docs/selection.md`、`industry/gold.example.jsonl`）。但 gold 还是两个 AI 行业示例，**财经标注样本为 0** | `scripts/eval-selection.ts` | 阈值校准是"标数据 + 跑现成脚本"，不是写代码 |
 | 6 | 门槛已是 `{T1:42, T1_5:48, T2:55}`（AI 时代 `{60,65,76}` 已弃），`selection.ts` 里挂着 TODO："上线前必须用 100-200 条人工标注 gold 样本重校准" | `industry/selection.ts` | 校准是既定欠账 |
 | 7 | LLM 走单一 `default` 网关（litellm.zero43.top → zero-flash），预设模型（zhipu/deepseek 等）在代码里但无 key；**无 failover** | `providers/llm.ts`、`.env` | 429 断流无自动恢复 |
@@ -89,26 +89,33 @@ CREATE INDEX market_daily_key_date_idx ON market_daily (index_key, trade_date DE
 
 ## 4. 分阶段执行
 
-### P0 稳定：让断流不再静默（~0.5-1 天，纯运维+少量代码）
+### P0 稳定：让断流不再静默 【✅ 已完成 2026-07，提交 b206cad】
 
-| 任务 | 位置 | 做法 |
+Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路、而飞书在 `.env` 里是全关的）：
+
+| 任务 | 位置 | 状态 |
 |---|---|---|
-| 飞书通道打通 | 生产 `.env` | 配 `FEISHU_PUSH_WEBHOOK_URL`（内容群）、`FEISHU_APP_ID/SECRET` + `FEISHU_INTERNAL_CHAT_ID` + `FEISHU_ALERT_CHAT_ID`，开 `FEISHU_INTERNAL_ENABLED` 与 `FEISHU_CONTENT_PUSH_ENABLED`。**当前两者均为 false，这是"断流静默"的根因** |
-| 静默窗口收紧 | `.env` | `ALERT_QUIET_MINUTES=120`（360 太长，半天没内容才算断） |
-| 源级失败告警 | `operations/alerts.ts` `collectFindings` | 加 finding：某源连续 N 次 `fetch_runs` 失败 / 全市场 4h 无新文章 / receipts 模型 429 占比超阈值 |
-| 网关 failover | litellm 服务端配置 | litellm 是自有服务：在 model_list 加 api.zero43.top 对应模型为 fallback，FinHot 代码零改动（receipt 机制天然兼容）。备选：`providers/llm.ts` 加代码级 fallback（先不动） |
+| Bark 通道 | `notify/bark.ts`（新）+ `sendAlert` 并行通道 | ✅ 真实推送 code 200 验证 |
+| 每日精选摘要 | `sendBarkDailyDigest` + `notify.bark-daily` cron 08:05（取当早日报） | ✅ |
+| 入选实时推送 | `notify/selected.ts` + `BARK_PUSH_SELECTED=t1/all/off` | ✅ 默认只推最高门槛 |
+| 静默窗口收紧 | `.env` | ✅ `ALERT_QUIET_MINUTES=120` |
+| 源级失败告警 | `operations/alerts.ts` | ✅ 自上次成功算连续 ≥3 次（2 天内），today 级 |
+| 网关 failover | litellm 服务端 | ⏸ 用户拍板：暂不动，后面自己配 |
 
-**验收**：① 模拟停采 → 飞书 `now` 级告警 < 15 分钟；② 网关 429 演练 → litellm 自动切备用，站点内容流不断；③ 日报正常进内容群。
+**验收口径改为**：① Bark 收到告警；② 服务器带库验证；③ 日报摘要推送。
 
-### P1 修地基：category + 摘要（~1 天，纯确定性代码）
+### P1 修地基：category + 摘要 【✅ 代码完成 2026-07，提交 773385d】
 
-| 任务 | 位置 | 做法 |
+诊断订正：84% 无 category 的根因是 **structure 步 `category` 解析失败静默变 null，且 `normalizeAnalysis:395` 直接 `?? null` 无兜底**（itemType 为空只是兜底线索也断了）。
+
+| 任务 | 位置 | 状态 |
 |---|---|---|
-| category 兜底链 | `editorial/analyze.ts` `normalizeAnalysis`（:395）+ `industry/taxonomy.ts` | `category = structure.category ?? TAG_FROM_ITEM_TYPE(writing.itemType) ?? TAG→CATEGORY(首个分类标签) ?? industry(兜底节)`。`CATEGORY_BY_ITEM_TYPE`（taxonomy.ts:73）已给 itemType→分类标签映射，缺的是**分类标签→类别 key** 的映射表（~9 行，新增 `CATEGORY_BY_TAG`）。零 LLM 成本，100% 确定性 |
-| 摘要骨架 | `industry/prompts/summarize-article.md` + 内容理解提示词 | 加要求：3-5 句，覆盖 事实/关键数字/影响对象/后续观察点，250-400 字 |
-| 基线快照 | `scripts/baseline.ts`（新） | 跑一次当前库：category 覆盖率、分数分布、摘要长度中位数、各源 7 天成功/失败率 → 存 `docs/baseline-<date>.md`，作为"before" |
+| category 兜底链 | `taxonomy.ts` `CATEGORY_BY_TAG` + `deriveCategory`（structure → itemType→标签 → 首个分类标签 → null），analyze.ts:395 接入 | ✅ 单测 4 例过 |
+| 摘要骨架 | `summarize-article.md` 120-220 字/4 句 + 影响对象/后续观察点；`content-understanding.md` 同步 | ✅ |
+| 基线快照 | `scripts/baseline.ts` | ✅ 待服务器带库跑 |
+| gold 候选导出 | `scripts/export-gold.ts`（tier × 分数段 × category 分层 200 条） | ✅ 待服务器带库跑 |
 
-**验收**：新入库数据 category 非空率 ≥ 95%（旧数据不回刷，自然更替）；摘要中位长度 ≥ 250 字；基线报告落盘。
+**验收**：新入库 category 非空率 ≥ 95%（旧数据不回刷，自然更替）；摘要中位长度 ≥ 250 字。
 
 ### P2 "对你重要"：评分标准 + 阈值校准（~1-2 天代码 + 你的 1-3 天标注）
 
@@ -185,7 +192,7 @@ CREATE INDEX market_daily_key_date_idx ON market_daily (index_key, trade_date DE
 | 回测过拟合 | 绝对数值 + baseline 对照 + out-of-time 验证；预期管理为"弱信号" |
 | scope 词表太窄（事件塞不进板块） | 允许 `neutral`/`none` 出口；回测期统计"无法归类"比例，> 30% 再扩词表 |
 | 方向步增加成本 | 仅入选项触发（每天十几条量级），用便宜模型；回执机制天然防重 |
-| 飞书告警疲劳 | 只 now/today 两级直发，其余进 09:00 digest（框架已有分级） |
+| 飞书告警疲劳 | 只 now/today 两级直发，其余进 09:00 digest（框架已有分级）→ 已由 Bark 分组（FinHot/FinHot告警/FinHot精选）替代 |
 | 两融数据 T+1 延迟 | 09:40 job 拉前一日值，日报标注"截至昨日" |
 
 ---
@@ -206,18 +213,18 @@ P0 稳定 ──► P1 地基（两者可并行）
 **日历预期**（我执行、你只参与 P2 标注）：
 - 第 1 天：P0 + P1 完成，站点变稳、内容变实
 - 第 2-5 天：P2（等你问卷 + 标注）+ P5 前半（embedding 启用）
-- 第 6-9 天：P3 上线，飞书卡片带方向 + 日报带盘面
+- 第 6-9 天：P3 上线，Bark 卡片带方向 + 日报带盘面
 - 第 10 天起：P5 收尾；同时回测数据开始积累
 - 第 3 周末：P4 第一次回测报告——"FinHot 对走势到底有没有用"的第一个实证答案
 
 ---
 
-## 8. 需要你拍板的决定
+## 8. 需要你拍板的决定 —— 2026-07 已答
 
-1. **飞书通道**：确认生产 `.env` 的飞书配置（当前 `FEISHU_*` 全关）——内容群 webhook 与内部告警机器人的凭证是否现成？
-2. **备用网关**：api.zero43.top 是否可直接进 litellm 的 fallback 列表（给模型名+key）？
-3. **投资口径问卷**（P2 前置，10 题，~15 分钟）：交易标的/周期、重点板块、动手型事件举例、噪声举例、重点人物公司核对。
-4. **回测定位确认**：接受"方向标签 = 可测量的弱信号（非预测器）"这个定位吗？
+1. ~~飞书通道~~ → **改用 Bark**（`https://api.day.app`，key 已在 `.env` 配好）。告警与推送都走 Bark；飞书保持关闭。
+2. ~~备用网关~~ → **暂不改，用户后面自己配置**。
+3. 投资口径：**A 股为主，重点发掘投资机会与投资趋势**（已答，评分提示词例子层已按此改，见提交 fb52c04）。还差：重点板块圈选（P2 问卷里 5-8 个）+ 什么事件会让你真的动手（2-3 个真实例子）。
+4. 回测定位：**已接受**——预测要可测量（方向 × 板块 × 1/3/5 日命中率 + baseline 对照），分析要结合历史事件与当下情况（P5 历史相似 + 归因），回测要可回归（固定口径、可重跑）。
 
 ## 9. 不做的清单（防资源错配）
 
