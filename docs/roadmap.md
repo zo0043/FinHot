@@ -98,6 +98,7 @@ Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路�
 | Bark 通道 | `notify/bark.ts`（新）+ `sendAlert` 并行通道 | ✅ 真实推送 code 200 验证 |
 | 每日精选摘要 | `sendBarkDailyDigest` + `notify.bark-daily` cron 08:05（取当早日报） | ✅ |
 | 入选实时推送 | `notify/selected.ts` + `BARK_PUSH_SELECTED=t1/all/off` | ✅ 默认只推最高门槛 |
+| 行情健康告警 | `operations/alerts.ts` | ✅ market_daily 连续 2 交易日未更新 → today 级 |
 | 静默窗口收紧 | `.env` | ✅ `ALERT_QUIET_MINUTES=120` |
 | 源级失败告警 | `operations/alerts.ts` | ✅ 自上次成功算连续 ≥3 次（2 天内），today 级 |
 | 网关 failover | litellm 服务端 | ⏸ 用户拍板：暂不动，后面自己配 |
@@ -138,7 +139,7 @@ Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路�
 | 任务 | 位置 | 做法 |
 |---|---|---|
 | 板块词表 | `industry/sectors.ts`（新） | 15-20 板块 + 东财 index key，含 A股整体/宏观流动性 两个特殊项 |
-| 日频市场数据 | `packages/backend/src/market/`（新）+ `market_daily` 表 | `market.daily` cron（交易班 15:35 拉指数+板块收盘与涨跌停家数；09:40 拉两融 T-1 余额）。数据源：东财 push2 公开 JSON（免费无 key），**备用源新浪 hq**（双源互备，接口不官方要防变更）；非交易日自动跳过。走 `lib/http-fetch.ts`，不经过信源流水线（结构化数据不是新闻，不污染文章池） |
+| 日频市场数据 | `packages/backend/src/market/`（✅ 代码已提交）+ `market_daily` 表 | `market.daily` cron 15:35：东财 push2 拉指数+板块收盘（f43/f60/f59/f86 缩放与时间戳处理，非交易日跳过）。涨跌停家数、两融余额接口结构不同，`PENDING_SERIES` 留 TODO（服务器侧核对接口后补） |
 | 方向判断步 | `editorial/direction.ts`（新）+ `prompts/directions.md`（新）+ `models.ts` 注册 | 触发点：`runAnalysis` 中分数 sum 已知后（:354 附近），**仅入选项**并行发起一次便宜模型调用。输出 `{ direction: bullish\|bearish\|neutral\|none, scope: [sectors key…] }`。提示词要点：只判"事件的内在方向"（事件本身偏多/偏空于哪个对象），不判"指数明天涨跌"；证据不足 → `neutral`/`none`，不许猜。落 `analyses.direction/scope`（迁移 0017），随 publication 层透出 |
 | 出口透出 | `publication/`（items/reports）+ `notify/selected.ts` + `reports/compose.ts` | 飞书卡片加一行 note：`方向：偏多 · A股整体/半导体`；日报头部加"今日盘面"（指数涨跌 + 涨跌停家数，来自 market_daily）；站点卡片加方向角标 |
 | 数据健康 | `operations/alerts.ts` | finding：连续 2 个交易日 market_daily 无新数据 → `today` 级 |
@@ -149,7 +150,7 @@ Bark 通道已按下单用户的 key 接通（告警原先只有飞书一条路�
 
 - `scripts/backtest.ts`（新）：对每条 `direction ∈ {bullish,bearish}` 且有板块 scope 的入选事件（日 T），取 scope 板块（或基准）`market_daily` 在 T+1 / T+3 / T+5 的累计涨跌 `pct`，hit = 符号一致。
 - 输出：分 horizon、分板块、分方向类型的命中率 + **基准自身方向持续性作 baseline**（回答"事件方向是否比大盘惯性更有信息"）→ 报告落 `docs/backtest/<date>.md`，可导入后台。
-- **诚实预期**：大概率是弱信号（55-60% 量级，与板块惯性接近）。回测的意义是**给你证据**：若某板块/某方向类型显著高于 baseline，你的飞书卡片就多了"历史上有几分可信"的注脚；若全面不显著，就把方向标签定位为纯分类而非信号，并回收 P3 的成本预期。
+- **诚实预期**：大概率是弱信号（55-60% 量级，与板块惯性接近）。回测的意义是**给你证据**：若某板块/某方向类型显著高于 baseline，Bark 卡片就多了"历史上有几分可信"的注脚；若全面不显著，就把方向标签定位为纯分类而非信号，并回收 P3 的成本预期。
 - 防过拟合：报告用全时段，但下结论前留最后 1 周做 out-of-time 验证。
 
 **验收**：第一份带数字的回测报告 + 明确的"保留/调整/降级"决策记录。
