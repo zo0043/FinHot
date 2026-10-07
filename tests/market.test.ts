@@ -44,3 +44,12 @@ test("rowsFromQuotes：secid 找回 index_key，不认得的跳过", () => {
 test("sectors.ts 的 indexKey 都能转成 secid（词表不变式）", () => {
   for (const s of SECTORS) assert.doesNotThrow(() => toSecid(s.indexKey), `${s.key} 的 indexKey 无法转 secid`);
 });
+
+test("sectors.ts 的 indexKey 全词表唯一（两个板块撞同一代码，行情会互相覆盖）", () => {
+  const seen = new Map<string, string>();
+  for (const s of SECTORS) {
+    const prev = seen.get(s.indexKey);
+    assert.equal(prev, undefined, `${s.key} 与 ${prev} 共用 indexKey ${s.indexKey}`);
+    seen.set(s.indexKey, s.key);
+  }
+});

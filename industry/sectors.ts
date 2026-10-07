@@ -1,52 +1,236 @@
-// A 股板块受控词表：方向步（editorial/direction.ts）的 scope 只能从这里选，回测（scripts/backtest.ts）
-// 也只认这些 key。选它的原因：板块太多会稀释样本，回测算不动；太少事件塞不进去。先订 18 个主线
-// 板块 + 2 个特殊对象，一个月后按 P4 回测里"塞不进任何板块"的比例（>30% 就扩）再调整。
+// 投资分析场景的 20 个"板块"（18 个行业板块 + 2 个大盘指数）。
+// 这是 FinHot 自己面向投资的词表，是通用"行业"词表（packages/contracts/src/industry.ts）的超集：
+// 通用词表给普通财经新闻分类用；这份给分析 prompt、日报 board、Bark 卡片、回测用，
+// 那里"板块表现"是核心输入（如"今天半导体涨了 3%，这条事件对半导体是什么方向？"）。
 //
-// indexKey：东方财富板块指数 secid 的 BK 部分（90.BKxxxx），用于取板块收盘/涨跌幅（market_daily）。
-// TODO(P3 市场数据模块)：BK 代码写自行业记忆，接东财前逐个对一遍（https://quote.eastmoney.com/center/boardlist.html
-// 的行业板块 secid），并在首次跑通时把返回的板块名打出来人工核对。
-
-// benchIndex：该板块的对照基准，默认沪深300；宏观与流动性相关板块用上证指数。
-
+// indexKey（东财板块代码）是兜底行情源（market/eastmoney.ts push2his kline / push2 ulist）用的；
+// 主数据源是腾讯财经，映射在 market/tencent.ts 的 SECTOR_TENCENT。
+//
+// ⚠️ indexKey 于 2026-10-07 用东财 searchapi（suggest/get?input=BKxxxx&type=14）逐个核对过：
+// 原 18 个代码里 14 个是错的（"从记忆写的"，如 BK0528 实为"转债标的"、BK0478 实为"有色金属"、
+// BK0438 实为"食品饮料"、BK0726 实为"工程咨询服务Ⅱ"），已全部换成核对后的正确代码。
+// 以后改动 indexKey 务必先用 searchapi 复核，别凭记忆写。
 export interface Sector {
-  key: string; // 受控词：提示词输出与数据库 scope 都用它
-  label: string; // 中文名：卡片与日报显示
-  indexKey: string; // 东财板块指数 secid 的 BK 部分
-  benchIndex: string; // 对照基准（sh000300 / sh000001）
-  aliases: readonly string[]; // 提示词里点名的同义说法，降低"塞不进"的比例
+  key: string;
+  label: string;
+  /** 东财板块指数代码（BKxxxx）或大盘指数（sh/sz+6 位）；兜底行情源用 */
+  indexKey: string;
+  /** "相对强度"对比用的基准指数 */
+  benchIndex: "sh000300" | "sh000001";
+  /** 1–2 句话说明，注入分析 prompt，让模型知道这个板块盯什么 */
+  blurb: string;
+  /**
+   * 通用行业词表 → 本板块的映射别名：analysis 的 classify 用 contracts/industry.ts 的粗粒度词表，
+   * 把行业/实体命中到这些别名上就归到本板块（SECTOR_ALIAS_GUIDE 给 prompt 用，SECTOR_BY_KEY 给代码用）。
+   * 注意"银行"既是本板块 key 又是 aliases：aliases 是"通用行业名"，允许与本板块 key 撞名。
+   */
+  aliases: string[];
 }
 
-const BENCH_300 = "sh000300";
-const BENCH_SH = "sh000001";
-
-export const A_SHARE_MARKET = { key: "a-share", label: "A股整体", indexKey: "sh000300", benchIndex: "sh000001", aliases: ["A股", "大盘", "两市"] } as const;
-export const MACRO_LIQUIDITY = { key: "macro", label: "宏观流动性", indexKey: "sh000001", benchIndex: "sh000300", aliases: ["货币政策", "流动性", "央行动作"] } as const;
-
-export const SECTORS: readonly Sector[] = [
-  A_SHARE_MARKET as Sector,
-  MACRO_LIQUIDITY as Sector,
-  { key: "semicap", label: "半导体/算力", indexKey: "BK1036", benchIndex: BENCH_300, aliases: ["半导体", "芯片", "算力", "AI硬件", "光模块"] },
-  { key: "ai-app", label: "AI应用/软件", indexKey: "BK1044", benchIndex: BENCH_300, aliases: ["AI应用", "软件", "云计算", "大模型商用"] },
-  { key: "new-energy", label: "新能源/光伏储能", indexKey: "BK1024", benchIndex: BENCH_300, aliases: ["光伏", "储能", "风电", "新能源车", "锂电"] },
-  { key: "liquor", label: "白酒/食品饮料", indexKey: "BK0478", benchIndex: BENCH_300, aliases: ["白酒", "食品饮料", "消费"] },
-  { key: "pharma", label: "医药/创新药", indexKey: "BK0727", benchIndex: BENCH_300, aliases: ["医药", "创新药", "医疗器械", "CXO"] },
-  { key: "military", label: "军工", indexKey: "BK0493", benchIndex: BENCH_300, aliases: ["军工", "国防", "航空发动机"] },
-  { key: "bank", label: "银行/保险", indexKey: "BK0475", benchIndex: BENCH_300, aliases: ["银行", "保险", "券商", "金融"] },
-  { key: "broker", label: "券商/非银", indexKey: "BK0473", benchIndex: BENCH_300, aliases: ["券商", "经纪", "资本市场中介"] },
-  { key: "real-estate", label: "房地产/建材", indexKey: "BK0451", benchIndex: BENCH_300, aliases: ["房地产", "地产", "建材", "家居"] },
-  { key: "auto", label: "汽车/机器人", indexKey: "BK1017", benchIndex: BENCH_300, aliases: ["汽车", "整车", "机器人", "零部件"] },
-  { key: "industrial", label: "工业/机械/自动化", indexKey: "BK0437", benchIndex: BENCH_300, aliases: ["机械", "工业母机", "自动化", "工程机械"] },
-  { key: "cyclical", label: "周期/资源品", indexKey: "BK0438", benchIndex: BENCH_300, aliases: ["煤炭", "钢铁", "有色", "化工", "资源"] },
-  { key: "precious", label: "贵金属", indexKey: "BK0528", benchIndex: BENCH_300, aliases: ["黄金", "白银", "贵金属"] },
-  { key: "energy", label: "石油石化/电力", indexKey: "BK0465", benchIndex: BENCH_300, aliases: ["石油", "石化", "电力", "公用事业", "电网"] },
-  { key: "transport", label: "交运/物流", indexKey: "BK0421", benchIndex: BENCH_300, aliases: ["航运", "港口", "物流", "航空", "快递"] },
-  { key: "telecom", label: "通信/运营商", indexKey: "BK0735", benchIndex: BENCH_300, aliases: ["通信", "运营商", "5G", "光通信"] },
-  { key: "media", label: "传媒/游戏", indexKey: "BK0726", benchIndex: BENCH_300, aliases: ["游戏", "传媒", "影视", "广告"] },
-  { key: "agriculture", label: "农业/养殖", indexKey: "BK0528", benchIndex: BENCH_300, aliases: ["养殖", "种植", "农业", "猪周期"] },
+export const SECTORS: Sector[] = [
+  {
+    key: "semicap",
+    label: "半导体/算力",
+    // 东财·半导体（2026-10-07 searchapi 核对）
+    indexKey: "BK1036",
+    benchIndex: "sh000300",
+    blurb:
+      "半导体与算力硬件：GPU/AI 芯片、CPU、存储（HBM/DRAM/NAND）、晶圆代工、封测、半导体设备与材料、光模块、PCB、服务器与数据中心基础设施。",
+    aliases: ["半导体/算力", "半导体设备", "半导体材料", "消费电子", "元件", "光学光电子", "通信设备", "计算机设备", "电子化学品", "其他电子Ⅱ"],
+  },
+  {
+    key: "ai-app",
+    label: "AI 应用/软件",
+    // 东财·计算机（一级行业；原 BK1044 实为"生物制品"，2026-10-07 改）
+    indexKey: "BK1207",
+    benchIndex: "sh000300",
+    blurb:
+      "AI 应用与软件：大模型与应用、Agent 平台、AI 编程/办公/教育/营销、行业 AI 解决方案、工业软件、信创、云计算与 SaaS。",
+    aliases: ["软件开发", "互联网服务", "数字媒体"],
+  },
+  {
+    key: "new-energy",
+    label: "新能源/光伏储能",
+    // 东财·新能源（原 BK1024 实为"绿色电力"，2026-10-07 改）
+    indexKey: "BK0493",
+    benchIndex: "sh000300",
+    blurb:
+      "新能源产业链：光伏（硅料/硅片/电池/组件/逆变器）、储能（电池/PCS/系统）、锂电（正极/负极/电解液/隔膜）、风电、氢能、充电桩。",
+    aliases: ["光伏设备", "风电设备", "电池", "电网设备"],
+  },
+  {
+    key: "liquor",
+    label: "白酒/食品饮料",
+    // 东财·食品饮料（一级行业，含白酒；原 BK0478 实为"有色金属"，2026-10-07 改；更窄的"白酒"二级板 BK0896 备选）
+    indexKey: "BK0438",
+    benchIndex: "sh000300",
+    blurb:
+      "白酒与大众食品：高端/次高端白酒、区域酒、啤酒、乳品、调味品、预调酒、软饮、休闲食品，以及渠道（批价、库存、动销）。",
+    aliases: ["白酒Ⅱ", "饮料乳品", "调味发酵品Ⅱ", "食品加工", "农产品加工"],
+  },
+  {
+    key: "pharma",
+    label: "医药/创新药",
+    // 东财·创新药（原 BK0727 实为"医疗服务"，2026-10-07 改）
+    indexKey: "BK1106",
+    benchIndex: "sh000300",
+    blurb:
+      "医药与创新药：创新药（FIC/BIC、出海 BD）、CXO、医疗器械（影像/高值耗材/IVD）、中药、消费医疗、集采与医保政策。",
+    aliases: ["化学制药", "生物制品", "医药商业", "医疗服务", "中药Ⅱ", "医疗器械", "医药生物"],
+  },
+  {
+    key: "military",
+    label: "军工",
+    // 东财·国防军工（原 BK0493 实为"新能源"，2026-10-07 改）
+    indexKey: "BK1204",
+    benchIndex: "sh000300",
+    blurb:
+      "军工产业链：航空主机与发动机、航天（火箭/卫星/北斗）、导弹与精确制导、舰船与电子对抗、军工电子（雷达/红外/连接器）、两机（航发）。",
+    aliases: ["航天Ⅱ", "航空装备Ⅱ", "地面兵装Ⅱ", "航海装备Ⅱ", "军工电子Ⅱ", "国防军工"],
+  },
+  {
+    key: "bank",
+    label: "银行/保险",
+    // 东财·银行Ⅱ（2026-10-07 searchapi 核对无误）
+    indexKey: "BK0475",
+    benchIndex: "sh000001",
+    blurb:
+      "银行与保险：大型银行、股份行、城商行/农商行（息差、不良、中收、分红与股息率）、寿险/财险（NBV、投资端、预定利率）、银行理财。",
+    aliases: ["银行", "保险Ⅱ"],
+  },
+  {
+    key: "broker",
+    label: "券商/非银",
+    // 东财·非银金融（一级行业，含券商/保险/多元；原 BK0473 证券Ⅱ 更窄，2026-10-07 改为更贴合标签的一级板）
+    indexKey: "BK1203",
+    benchIndex: "sh000001",
+    blurb:
+      "券商与非银金融：经纪/两融/成交量、投行业务（IPO/再融资）、并购重组、资管与公募、量化与自营、保险（资产端/负债端）、多元金融（租赁/信托/期货）。",
+    aliases: ["证券Ⅱ", "多元金融", "非银金融"],
+  },
+  {
+    key: "real-estate",
+    label: "房地产/建材",
+    // 东财·房地产开发（2026-10-07 searchapi 核对无误）
+    indexKey: "BK0451",
+    benchIndex: "sh000001",
+    blurb:
+      "房地产链：开发（销售、拿地、融资“三支箭”、保交楼、白名单）、物管与代建、建材（水泥/玻璃/防水/瓷砖）、家居与家电联动、限购/降首付/降利率政策。",
+    aliases: ["房地产开发", "房地产服务Ⅱ", "建筑材料Ⅱ"],
+  },
+  {
+    key: "auto",
+    label: "汽车/机器人",
+    // 东财·汽车（一级行业；原 BK1017 实为"资源开采概念"，2026-10-07 改；"机器人概念" BK1090 备选）
+    indexKey: "BK1211",
+    benchIndex: "sh000300",
+    blurb:
+      "汽车与机器人：整车（新能源/智能驾驶）、动力电池、热管理/轻量化、汽车电子与智驾域控、充电桩、人形机器人（减速器/丝杠/传感器/控制器）、工业自动化。",
+    aliases: ["乘用车", "商用车", "汽车零部件Ⅱ", "汽车服务Ⅱ", "汽车", "电池"],
+  },
+  {
+    key: "industrial",
+    label: "工业/机械/自动化",
+    // 东财·机械设备（一级行业；原 BK0437 实为"煤炭"，2026-10-07 改）
+    indexKey: "BK1205",
+    benchIndex: "sh000300",
+    blurb:
+      "工业装备与自动化：通用/专用机械、工业机器人（本体/核心部件）、数控机床、激光、工程机械（挖机/起重机，看开工率与出口）、轨交设备、智能制造与工业软件。",
+    aliases: ["通用设备", "专用设备", "自动化设备", "工程机械", "轨交设备Ⅱ", "电气设备"],
+  },
+  {
+    key: "cyclical",
+    label: "周期/资源品",
+    // 东财·有色金属（原 BK0438 实为"食品饮料"，2026-10-07 改；资源品大周期以有色为代表）
+    indexKey: "BK0478",
+    benchIndex: "sh000001",
+    blurb:
+      "周期与资源品：有色（铜/铝/锂/稀土，看 LME/SHFE 价格与库存）、煤炭/油气（看现货价与安监）、钢铁（看螺纹/热卷与利润）、化工（看价差）、航运（看运价）。",
+    aliases: ["有色金属", "煤炭开采加工", "钢铁Ⅱ", "化学原料", "化学制品", "航运港口", "能源金属"],
+  },
+  {
+    key: "precious",
+    label: "贵金属",
+    // 东财·贵金属（原 BK0528 实为"转债标的"，2026-10-07 改）
+    indexKey: "BK0732",
+    benchIndex: "sh000001",
+    blurb:
+      "贵金属：黄金（看 COMEX/上金所金价、实际利率、央行购金、避险需求）、白银、矿业股（金矿/银矿/钼）、黄金 ETF 与饰品消费。",
+    aliases: ["贵金属", "小金属", "能源金属"],
+  },
+  {
+    key: "energy",
+    label: "石油石化/电力",
+    // 东财·石油石化（一级行业；原 BK0465 实为"化学制药"，2026-10-07 改；"电力" BK0428 备选）
+    indexKey: "BK0464",
+    benchIndex: "sh000001",
+    blurb:
+      "石油石化与电力：原油（看 OPEC 配额、EIA/IEA 库存、地缘）、成品油与炼化、天然气、煤炭（见周期）、发电（火电/水电/核电/绿电，看利用小时与电价）、电网投资。",
+    aliases: ["石油石化", "石油开采", "燃气Ⅱ", "电力公用事业", "煤炭开采加工"],
+  },
+  {
+    key: "transport",
+    label: "交运/物流",
+    // 东财·交通运输（一级行业；原 BK0421 为"铁路公路"二级板，2026-10-07 改一级板覆盖更全）
+    indexKey: "BK1210",
+    benchIndex: "sh000300",
+    blurb:
+      "交通运输与物流：航空（看油价/汇率/票价/航线）、航运（集运运价、油运 VLCC、干散）、铁路/公路（看货量/客车流）、快递物流（看件量与单票）、港口。",
+    aliases: ["物流", "航空运输Ⅱ", "航运港口", "铁路公路", "港口航运", "交运设备"],
+  },
+  {
+    key: "telecom",
+    label: "通信/运营商",
+    // 东财·通信（一级行业；原 BK0735 实为"计算机设备"，2026-10-07 改）
+    indexKey: "BK1215",
+    benchIndex: "sh000300",
+    blurb:
+      "通信与运营商：三大运营商（ARPU、资本开支、算力网络）、光模块/光器件（800G/1.6T，绑定 AI 算力）、CPO/硅光、PCB/铜连接、卫星互联网（低轨）、IDC 与液冷。",
+    aliases: ["通信设备", "通信服务", "通信", "光通信"],
+  },
+  {
+    key: "media",
+    label: "传媒/游戏",
+    // 东财·传媒（一级行业；原 BK0726 实为"工程咨询服务Ⅱ"，2026-10-07 改）
+    indexKey: "BK0486",
+    benchIndex: "sh000300",
+    blurb:
+      "传媒与游戏：游戏（版号、新品、流水）、影视（票房、长视频平台、分账）、AI+内容（AIGC、IP 运营）、广告营销（效果广告、出海）、出版与教育。",
+    aliases: ["游戏Ⅱ", "影视院线", "广告营销", "文化传媒", "出版", "教育"],
+  },
+  {
+    key: "agriculture",
+    label: "农业/养殖",
+    // 东财·农林牧渔（一级行业；原 BK0528 实为"转债标的"，2026-10-07 改）
+    indexKey: "BK0433",
+    benchIndex: "sh000300",
+    blurb:
+      "农业与养殖：生猪（看猪价/能繁母猪存栏/产能去化）、禽链（白羽肉鸡/鸡肉）、饲料与动保、种植（粮价/种子）、渔业、农垦与农机。",
+    aliases: ["种植业与林业", "养殖业", "农产品加工", "饲料", "动物保健Ⅱ", "渔业"],
+  },
+  {
+    key: "a-share",
+    label: "A股大盘",
+    indexKey: "sh000300",
+    benchIndex: "sh000300",
+    blurb: "沪深 300 代表的 A 股大盘整体：总量流动性、政策、风险偏好、北向资金、成交额。",
+    aliases: [],
+  },
+  {
+    key: "macro",
+    label: "宏观",
+    indexKey: "sh000001",
+    benchIndex: "sh000001",
+    blurb: "宏观与政策：GDP/CPI/PPI、PMI、社融/M2、利率与汇率、央行操作、财政政策、监管政策，以及全球宏观（美联储、地缘）。",
+    aliases: ["宏观"],
+  },
 ];
 
-export const SECTOR_KEYS = SECTORS.map((s) => s.key) as unknown as readonly [string, ...string[]];
 export const SECTOR_BY_KEY = new Map(SECTORS.map((s) => [s.key, s]));
 
-/** 方向提示词里点名的同义说法汇总（"只在影响对象明显时给 scope"的判据就在这些说法上）。 */
-export const SECTOR_ALIAS_GUIDE = SECTORS.map((s) => `${s.label}（${s.key}）：${s.aliases.join("、")}`).join("\n");
+export const SECTOR_KEYS = SECTORS.map((s) => s.key);
+
+/** 给 prompt 的"通用行业名 → 板块"对照表（classify 阶段把行业/实体命中到板块用）。 */
+export const SECTOR_ALIAS_GUIDE = SECTORS.filter((s) => s.aliases.length)
+  .map((s) => `- ${s.key}（${s.label}）← ${s.aliases.join("、")}`)
+  .join("\n");

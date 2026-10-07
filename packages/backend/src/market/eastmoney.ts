@@ -63,3 +63,68 @@ export async function fetchQuotes(secids: readonly string[], timeoutMs = 15_000)
   if (res.status !== 200) throw new Error(`东财行情接口返回 ${res.status}`);
   return parseQuotes(JSON.parse(res.text()));
 }
+
+// ── 兑底源：push2his 历史 K 线子域 ──
+// 2026-10-07 实测：push2 ulist 对宿主 502，但 kline 子域活着——只是同 IP 限流激进（连发会被断连），
+// 必须限速，且只在回退日调用（平时每日走腾讯主源）。lmt=2 拿最后两根 bar 算收盘/昨收。
+const KLINE_HIS_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get";
+
+export interface KlineQuote {
+  secid: string;
+  price: number; // 最后一根 bar 收盘
+  prevClose: number; // 倒数第二根 bar 收盘
+  pct: number; // (last/prev−1)×100，%
+  date: string; // 最后一根 bar 的日期 YYYY-MM-DD
+}
+
+/** push2his kline JSON → 最近两根 bar 的行情；klines 行形如 "2026-09-30,4357.62,162949626" */
+export function parseKlineQuotes(payload: unknown, secid: string): KlineQuote | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const klines = (payload as { data?: { klines?: unknown } }).data?.klines;
+  if (!Array.isArray(klines)) return null;
+  const bars: { date: string; close: number }[] = [];
+  for (const line of klines) {
+    if (typeof line !== "string") continue;
+    const [date, close] = line.split(",");
+    const c = Number(close);
+    if (!date || !Number.isFinite(c) || c <= 0) continue;
+    bars.push({ date, close: c });
+  }
+  if (bars.length < 2) return null; // 没有昨收就不写（宁缺毋滥）
+  const last = bars[bars.length - 1];
+  const prev = bars[bars.length - 2];
+  return {
+    secid,
+    price: last.close,
+    prevClose: prev.close,
+    pct: Math.round((last.close / prev.close - 1) * 10000) / 100,
+    date: last.date,
+  };
+}
+
+/** 逐个 secid 拉 push2his K 线（默认 3.5s 间隔防限流）；单个失败跳过，不中断整条兑底链 */
+export async function fetchQuotesKline(
+  secids: readonly string[],
+  opts: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<KlineQuote[]> {
+  const out: KlineQuote[] = [];
+  for (let i = 0; i < secids.length; i++) {
+    const secid = secids[i];
+    try {
+      const url = `${KLINE_HIS_URL}?secid=${encodeURIComponent(secid)}&klt=101&fqt=0&end=20500101&lmt=2&fields1=f3&fields2=f51,f53`;
+      const res = await guardedFetch(url, {
+        timeoutMs: opts.timeoutMs ?? 15_000,
+        maxBytes: 2 * 1024 * 1024,
+        route: "egress",
+      });
+      if (res.status === 200) {
+        const q = parseKlineQuotes(JSON.parse(res.text()), secid);
+        if (q) out.push(q);
+      }
+    } catch {
+      // 单码失败容忍（该日 missing）
+    }
+    if (i < secids.length - 1) await new Promise((r) => setTimeout(r, opts.intervalMs ?? 3500));
+  }
+  return out;
+}

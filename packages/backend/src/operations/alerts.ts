@@ -123,7 +123,7 @@ export async function collectFindings(now = Date.now()): Promise<Finding[]> {
       title: "市场行情数据已连续两个交易日未更新",
       impact: "回测、每日推送里的盘面行都会停在旧日期；内容本身不受影响",
       heals: "不会，行情接口或入库出问题会一直停",
-      action: "转给 AI 排查（东财改版/限流，或 market_daily 写入失败）",
+      action: "转给 AI 排查（腾讯/东财接口改版/限流，或 market_daily 写入失败）",
       detail: `最近一条行情是 ${market.last_trade ?? "（从没拉过）"}，至少应该是 ${marketCutoff}`,
       since: new Date(),
     });
