@@ -105,9 +105,11 @@ async function main(): Promise<void> {
   if (process.argv.includes("--sync")) {
     const summary = await syncMarketDaily(new Date());
     console.log("[sync]", JSON.stringify(summary));
-    return;
+    // postgres 池 idle_timeout=600s 会把事件循环挂住 10 分钟才自然退出，一次性脚本显式退出
+    process.exit(0);
   }
   await backfill(arg("days", 60));
+  process.exit(0);
 }
 
 main().catch((err) => {

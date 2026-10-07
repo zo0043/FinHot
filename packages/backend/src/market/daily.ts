@@ -93,7 +93,11 @@ export async function syncMarketDaily(now = new Date(), deps: MarketSyncDeps = {
     deps.lastWritten ??
     (async () => {
       const [r] = await sql`select max(trade_date) as d from market_daily`;
-      return (r?.d as string | null) ?? null;
+      const d = r?.d;
+      if (!d) return null;
+      // postgres.js 把 date 列解成 Date 对象："2026-09-30" <= Date 会走 Number 强转 → NaN → skip 永不触发，
+      // 同一天会被重复写（upsert 幂等不丢数据，但 job 摘要/告警语义错）。统一归一成 YYYY-MM-DD 字符串比较。
+      return typeof d === "string" ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10);
     });
 
   const errors: string[] = [];

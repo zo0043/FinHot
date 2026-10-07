@@ -284,6 +284,15 @@ test("syncMarketDaily: 库内已有该交易日（节假日重复跑）→ skip 
   assert.match(summary.reason ?? "", /无新交易日/);
 });
 
+// 回归：postgres.js 把 date 列解成 Date 对象，字符串 <= Date → NaN → skip 永不触发（2026-10-07 实测：
+// 同一天被反复重写 20 行）。不注入 lastWritten → 走真实 DB 查询路径。
+test("syncMarketDaily: 默认 lastWritten（真实 DB 查询，date→Date 对象）→ 同一天 skip", async () => {
+  await sql`insert into market_daily (trade_date, index_key, close, prev_close, pct) values ('2026-09-30', 'sh000300', 1, 1, 0) on conflict (trade_date, index_key) do nothing`;
+  const summary = await syncMarketDaily(new Date(), { tencent: async () => okResult() });
+  assert.equal(summary.skipped, true, `expected skip, got ${JSON.stringify(summary)}`);
+  assert.equal(summary.written, 0);
+});
+
 test("syncMarketDaily: 新交易日 → 正常写（测试库）", async () => {
   const res: MarketSourceResult = {
     tradeDate: "2020-01-02",
@@ -297,6 +306,6 @@ test("syncMarketDaily: 新交易日 → 正常写（测试库）", async () => {
 
 // DI 测试会真实写测试库：清掉脏行并关池（postgres 池 idle_timeout 600s，不关会把事件循环挂住→文件超时）
 after(async () => {
-  await sql`DELETE FROM market_daily WHERE trade_date = '2020-01-02'`;
+  await sql`DELETE FROM market_daily WHERE trade_date in ('2020-01-02', '2026-09-30') and index_key = 'sh000300'`;
   await closeDb();
 });
