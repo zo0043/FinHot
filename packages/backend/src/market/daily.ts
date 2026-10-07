@@ -15,6 +15,12 @@ export interface MarketRow {
   close: number | null;
   prev_close: number | null;
   pct: number | null;
+  // 资金流/多周期（仅腾讯源提供；缺失 → NULL，见 writeMarketRows）
+  zljlr?: number; // 主力净流入（元），负=净流出
+  zdf_d5?: number; // 5 日累计涨跌幅 %
+  zdf_d20?: number; // 20 日累计涨跌幅 %
+  zdf_d60?: number; // 60 日累计涨跌幅 %
+  zgb_raw?: string; // 涨跌家数 "102/122"，并入 extra.zgb（不动 schema）
 }
 
 /** 行情 → market_daily 行。secid 反过来找回 index_key，认不出的 secid（比如预热期的 BK 代码）跳过。 */
@@ -138,11 +144,20 @@ export async function writeMarketRows(rows: MarketRow[], now = new Date()): Prom
   //（2026-10-07 实测：单条 insert 成功、同语句第 2 行起必崩）。
   const fetchedAt = new Date(now.getTime());
   for (const r of rows) {
+    // zljlr/zdf_d* 缺失 → undefined → NULL（不写 0）。zgb 并入既有 extra jsonb：
+    // jsonb 的 || 保留 extra 里其他 key（本代码此前不写 extra，但 schema 语义上它属于共享列）；
+    // 同一天重跑幂等（{zgb} || {zgb} = {zgb}）。参数用 sql.json：对象走 JSON.stringify，
+    // 裸字符串在 prepared 重绑时会按 jsonb OID 再 stringify 一层 → 引号嵌引号。
     await sql`
-      INSERT INTO market_daily (trade_date, index_key, close, prev_close, pct, fetched_at)
-      VALUES (${r.trade_date}::date, ${r.index_key}, ${r.close}, ${r.prev_close}, ${r.pct}, ${fetchedAt}::timestamptz)
+      INSERT INTO market_daily (trade_date, index_key, close, prev_close, pct, zljlr, zdf_d5, zdf_d20, zdf_d60, extra, fetched_at)
+      VALUES (${r.trade_date}::date, ${r.index_key}, ${r.close}, ${r.prev_close}, ${r.pct},
+              ${r.zljlr ?? null}, ${r.zdf_d5 ?? null}, ${r.zdf_d20 ?? null}, ${r.zdf_d60 ?? null},
+              ${sql.json(r.zgb_raw != null ? { zgb: r.zgb_raw } : {})}, ${fetchedAt}::timestamptz)
       ON CONFLICT (trade_date, index_key) DO UPDATE SET
-        close = EXCLUDED.close, prev_close = EXCLUDED.prev_close, pct = EXCLUDED.pct, fetched_at = EXCLUDED.fetched_at`;
+        close = EXCLUDED.close, prev_close = EXCLUDED.prev_close, pct = EXCLUDED.pct,
+        zljlr = EXCLUDED.zljlr, zdf_d5 = EXCLUDED.zdf_d5, zdf_d20 = EXCLUDED.zdf_d20, zdf_d60 = EXCLUDED.zdf_d60,
+        extra = market_daily.extra || EXCLUDED.extra,
+        fetched_at = EXCLUDED.fetched_at`;
   }
   return rows.length;
 }

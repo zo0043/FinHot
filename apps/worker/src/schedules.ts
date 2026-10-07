@@ -21,6 +21,7 @@ import { sourceHealthWeekly } from "@aihot/backend/operations/reports";
 import { markStalePendingReceipts } from "@aihot/backend/providers/receipts";
 import { markStaleDeliveries } from "@aihot/backend/notify/deliver";
 import { syncMarketDaily } from "@aihot/backend/market/daily";
+import { labelOutcomes } from "@aihot/backend/market/labeler";
 import { barkEnabled, sendBarkDailyDigest } from "@aihot/backend/notify/bark";
 
 interface Scheduled {
@@ -56,6 +57,8 @@ export const SCHEDULES: Scheduled[] = [
   { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() },
   // 日频市场数据：工作日收盘后（15:35 北京时间）拉一次；非交易日按接口时间戳判掉（missed once 不求补）
   { name: "market.daily", cron: "35 15 * * *", missed: "once", run: () => syncMarketDaily() },
+  // T+N 结果标注：market.daily 落库后（16:10 北京时间，工作日）标 prediction_ledger 的 pending 行；幂等，部分就绪下轮重访
+  { name: "market.label-outcomes", cron: "10 16 * * 1-5", missed: "once", run: () => labelOutcomes() },
   { name: "ops.retention", cron: "30 3 * * *", missed: "once", run: () => dailyRetention() },
   { name: "sources.icons", cron: "40 4 * * *", missed: "once", run: () => refreshSourceIcons() },
   // IndexNow for new indexable pages (off unless INDEXNOW_SUBMIT_ENABLED).

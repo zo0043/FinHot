@@ -18,13 +18,15 @@ import { parseKlineQuotes } from "@aihot/backend/market/eastmoney";
 import {
   rowsFromQuotes,
   syncMarketDaily,
+  writeMarketRows,
+  type MarketRow,
   type MarketSourceResult,
 } from "@aihot/backend/market/daily";
 
 // ───────── fixture（2026-10-07 实测样本，交易日 2026-09-30） ─────────
 
-const board = (code: string, name: string, zxj: number, zd: number, zdf: number) =>
-  ({ code, name, stock_type: "BK", zxj: String(zxj), zd: String(zd), zdf: String(zdf) });
+const board = (code: string, name: string, zxj: number, zd: number, zdf: number, extra: Record<string, string> = {}) =>
+  ({ code, name, stock_type: "BK", zxj: String(zxj), zd: String(zd), zdf: String(zdf), ...extra });
 
 // 腾讯 hy 榜的 15 个申万一级（SECTOR_TENCENT 用到的）
 const HY_ROWS = [
@@ -122,6 +124,74 @@ test("parseRankBoards: 非法输入 → 空数组", () => {
   assert.deepEqual(parseRankBoards({ data: { rank_list: "oops" } }, "hy"), []);
 });
 
+// ───────── parseRankBoards：资金流/多周期字段（2026-10 实测 rank 行均带这些字符串字段） ─────────
+
+test("parseRankBoards: zljlr/zdf_d5/zdf_d20/zdf_d60 字符串数字 → 数字", () => {
+  const boards = parseRankBoards(
+    {
+      data: {
+        rank_list: [
+          board("pt01801120", "食品饮料", 13618.21, 225.63, 1.68, {
+            zljlr: "142807.54",
+            zdf_d5: "-0.19",
+            zdf_d20: "-2.58",
+            zdf_d60: "3.89",
+          }),
+        ],
+      },
+    },
+    "hy",
+  );
+  assert.equal(boards.length, 1);
+  assert.equal(boards[0].zljlr, 142807.54);
+  assert.equal(boards[0].zdf_d5, -0.19);
+  assert.equal(boards[0].zdf_d20, -2.58);
+  assert.equal(boards[0].zdf_d60, 3.89);
+  // 既有字段不受影响
+  assert.equal(boards[0].close, 13618.21);
+  assert.equal(boards[0].pct, 1.68);
+});
+
+test("parseRankBoards: zljlr 负值（主力净流出）保留负号", () => {
+  const boards = parseRankBoards(
+    { data: { rank_list: [board("pt01801110", "家用电器", 8337.71, -47.79, -0.57, { zljlr: "-4852.31" })] } },
+    "hy",
+  );
+  assert.equal(boards[0].zljlr, -4852.31);
+});
+
+test("parseRankBoards: 新字段缺失/空串/'abc' → undefined（不猜 0，不挂 key）", () => {
+  const boards = parseRankBoards(
+    {
+      data: {
+        rank_list: [
+          board("pt01801999", "无新字段", 100, 1, 1),
+          board("pt01801998", "坏新字段", 100, 1, 1, { zljlr: "", zdf_d5: "abc", zdf_d20: "0.5" }),
+        ],
+      },
+    },
+    "hy",
+  );
+  assert.equal(boards.length, 2);
+  assert.equal(boards[0].zljlr, undefined);
+  assert.equal(boards[0].zdf_d5, undefined);
+  assert.ok(!("zljlr" in boards[0]!), "缺失字段不挂 key");
+  assert.equal(boards[1].zljlr, undefined);
+  assert.equal(boards[1].zdf_d5, undefined);
+  assert.ok(!("zdf_d5" in boards[1]!), "非法字符串不挂 key");
+  assert.equal(boards[1].zdf_d20, 0.5); // 同行的合法字段照常解析
+});
+
+test("parseRankBoards: zgb 涨跌家数原样透传字符串（不转数字）", () => {
+  const boards = parseRankBoards(
+    { data: { rank_list: [board("pt01801120", "食品饮料", 13618.21, 225.63, 1.68, { zgb: "102/122" })] } },
+    "hy",
+  );
+  assert.equal(boards[0].zgb_raw, "102/122");
+  const bare = parseRankBoards({ data: { rank_list: [board("pt01801999", "无 zgb", 100, 1, 1)] } }, "hy");
+  assert.equal(bare[0].zgb_raw, undefined);
+});
+
 // ───────── SECTOR_TENCENT 映射不变式 ─────────
 
 test("SECTOR_TENCENT 恰好覆盖 18 个行业板块（与 SECTORS 非指数板块一一对应）", () => {
@@ -189,6 +259,48 @@ test("rowsFromTencent: 缺一个板块 → 19 行 + missing 记该板块", () =>
   const { rows, missing } = rowsFromTencent(marketFixture({ dropGn: "芯片概念" }));
   assert.deepEqual(missing, ["semicap"]);
   assert.equal(rows.length, 19);
+});
+
+function enrichedMarketData(): TencentMarketData {
+  // 给全部 hy 行带上资金流/多周期字段（gn 行不带，验证缺失时为 undefined）
+  const enrichedHy = HY_ROWS.map((r) => ({
+    ...r,
+    zljlr: "142807.54",
+    zdf_d5: "-0.19",
+    zdf_d20: "-2.58",
+    zdf_d60: "3.89",
+    zgb: "102/122",
+  }));
+  return {
+    tradeDate: "2026-09-30",
+    boards: [
+      ...parseRankBoards({ data: { rank_list: enrichedHy } }, "hy"),
+      ...parseRankBoards({ data: { rank_list: GN_ROWS } }, "gn"),
+    ],
+    indices: {
+      sh000300: parseIndexKline(KLINE_300, "sh000300"),
+      sh000001: parseIndexKline(KLINE_001, "sh000001"),
+    },
+  };
+}
+
+test("rowsFromTencent: 板块行的 zljlr/zdf_d*/zgb 透传到 MarketRow；源未提供 → undefined", () => {
+  const { rows, missing } = rowsFromTencent(enrichedMarketData());
+  assert.deepEqual(missing, []);
+  const liquor = rows.find((r) => r.index_key === "BK0438"); // hy 行：有资金流字段
+  assert.ok(liquor);
+  assert.equal(liquor.zljlr, 142807.54);
+  assert.equal(liquor.zdf_d5, -0.19);
+  assert.equal(liquor.zdf_d20, -2.58);
+  assert.equal(liquor.zdf_d60, 3.89);
+  assert.equal(liquor.zgb_raw, "102/122");
+  const semi = rows.find((r) => r.index_key === "BK1036"); // gn 行：源未提供
+  assert.ok(semi);
+  assert.equal(semi.zljlr, undefined);
+  assert.equal(semi.zdf_d5, undefined);
+  assert.equal(semi.zdf_d20, undefined);
+  assert.equal(semi.zdf_d60, undefined);
+  assert.equal(semi.zgb_raw, undefined);
 });
 
 // ───────── sane ─────────
@@ -304,8 +416,55 @@ test("syncMarketDaily: 新交易日 → 正常写（测试库）", async () => {
   assert.equal(summary.skipped, false);
 });
 
+// ───────── writeMarketRows：资金流/多周期列 + extra.zgb（测试库） ─────────
+
+type EnrichedRow = { zljlr: number | null; zdf_d5: number | null; zdf_d20: number | null; zdf_d60: number | null; extra: Record<string, unknown> };
+
+const enrichedSelect = (): Promise<EnrichedRow[]> =>
+  sql<EnrichedRow[]>`
+    select zljlr, zdf_d5, zdf_d20, zdf_d60, extra from market_daily
+    where trade_date = '2020-01-03'::date and index_key in ('BK_TEST_A', 'BK_TEST_B') order by index_key`;
+
+test("writeMarketRows: zljlr/zdf_d* 落 numeric 列，缺失 → NULL；zgb 并入 extra（保留既有 key）", async () => {
+  const rows: MarketRow[] = [
+    {
+      index_key: "BK_TEST_A",
+      trade_date: "2020-01-03",
+      close: 100,
+      prev_close: 99,
+      pct: 1.01,
+      zljlr: -4852.31,
+      zdf_d5: -1.87,
+      zdf_d20: -4.51,
+      zdf_d60: -1.88,
+      zgb_raw: "36/93",
+    },
+    { index_key: "BK_TEST_B", trade_date: "2020-01-03", close: 100, prev_close: 99, pct: 1.01 },
+  ];
+  assert.equal(await writeMarketRows(rows), 2);
+  const [a, b] = await enrichedSelect();
+  assert.equal(a.zljlr, -4852.31);
+  assert.equal(a.zdf_d5, -1.87);
+  assert.equal(a.zdf_d20, -4.51);
+  assert.equal(a.zdf_d60, -1.88);
+  assert.deepEqual(a.extra, { zgb: "36/93" });
+  assert.equal(b.zljlr, null);
+  assert.equal(b.zdf_d5, null);
+  assert.equal(b.zdf_d20, null);
+  assert.equal(b.zdf_d60, null);
+  assert.deepEqual(b.extra, {});
+  // 重跑（幂等 upsert）：extra 既有 key 保留、zgb 更新、本次未带的字段 → NULL
+  await sql`update market_daily set extra = '{"keep":1}'::jsonb where trade_date = '2020-01-03'::date and index_key = 'BK_TEST_A'`;
+  assert.equal(await writeMarketRows([{ index_key: "BK_TEST_A", trade_date: "2020-01-03", close: 101, prev_close: 99, pct: 2.02, zgb_raw: "37/93" }]), 1);
+  const [a2] = await enrichedSelect();
+  assert.deepEqual(a2.extra, { keep: 1, zgb: "37/93" });
+  assert.equal(a2.zljlr, null);
+  assert.equal(a2.zdf_d5, null);
+});
+
 // DI 测试会真实写测试库：清掉脏行并关池（postgres 池 idle_timeout 600s，不关会把事件循环挂住→文件超时）
 after(async () => {
   await sql`DELETE FROM market_daily WHERE trade_date in ('2020-01-02', '2026-09-30') and index_key = 'sh000300'`;
+  await sql`DELETE FROM market_daily WHERE trade_date = '2020-01-03'::date and index_key in ('BK_TEST_A', 'BK_TEST_B')`;
   await closeDb();
 });

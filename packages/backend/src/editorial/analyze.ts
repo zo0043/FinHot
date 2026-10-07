@@ -31,7 +31,7 @@ import { judgeDirection } from "./direction.ts";
 
 export { buildMaterial, loadAnalyzeInput, type AnalyzeInputArticle };
 
-export const PROMPT_VERSIONS = {
+export export const PROMPT_VERSIONS = {
   prefilter: promptVersion("prefilter"),
   score: promptVersion("selection-score"),
   understand: promptVersion("understand"),

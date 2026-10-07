@@ -2,7 +2,7 @@
 //   板块榜单  https://proxy.finance.qq.com/cgi/cgi-bin/rank/pt/getRank?board_type=hy&sort_type=price&direct=down&offset=0&count=40
 //     board_type=hy 是申万一级 31 个行业板块，gn 是 200+ 概念板块；一次请求拿全量。
 //     每行：code(pt018xxxxx/pt02xxxxxx)、name、zxj(最新价=收盘)、zd(涨跌点数)、zdf(涨跌幅%)，
-//     另有 zdf_d5/d20/d60、zljlr(主力净流入)、zgb(涨跌家数)（本期未用，留待日报升级）。
+//     另有 zdf_d5/d20/d60(多周期累计%)、zljlr(主力净流入)、zgb(涨跌家数)（一并解析，落 market_daily 富字段）。
 //   指数日 K  https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=sh000300,day,,,3,
 //     data[code].day = [date, open, close, high, low, volume, ...]，最后一根 bar = 最近交易日。
 // 交易日以指数 K 线最后一根 bar 的日期为准（非交易日榜单仍回上一收盘，指数 K 线仍回最后交易日）。
@@ -19,6 +19,12 @@ export interface TencentBoard {
   close: number | null; // zxj（最新价；收盘后即当日收盘价）
   prevClose: number | null; // zxj - zd
   pct: number | null; // zdf，单位 %
+  // 资金流/多周期（rank 行原始字符串，缺失/非法则不挂 key —— 0 是有效值，不猜）
+  zljlr?: number; // 主力净流入（元），负=净流出
+  zdf_d5?: number; // 5 日累计涨跌幅 %
+  zdf_d20?: number; // 20 日累计涨跌幅 %
+  zdf_d60?: number; // 60 日累计涨跌幅 %
+  zgb_raw?: string; // 涨跌家数 "102/122"，原文透传
 }
 
 export interface TencentKBar {
@@ -59,14 +65,26 @@ export function parseRankBoards(payload: unknown, boardType: "hy" | "gn"): Tence
     if (!code || !name) continue;
     const zxj = toNum(x.zxj);
     const zd = toNum(x.zd);
-    out.push({
+    const b: TencentBoard = {
       code,
       name,
       boardType,
       close: zxj,
       prevClose: zxj != null && zd != null ? round2(zxj - zd) : null,
       pct: toNum(x.zdf),
-    });
+    };
+    // 资金流/多周期：源缺字段/空串/非数字 → 不挂 key（下游按 undefined→NULL 处理，不写 0）
+    const zljlr = toNum(x.zljlr);
+    if (zljlr != null) b.zljlr = zljlr;
+    const zdf_d5 = toNum(x.zdf_d5);
+    if (zdf_d5 != null) b.zdf_d5 = zdf_d5;
+    const zdf_d20 = toNum(x.zdf_d20);
+    if (zdf_d20 != null) b.zdf_d20 = zdf_d20;
+    const zdf_d60 = toNum(x.zdf_d60);
+    if (zdf_d60 != null) b.zdf_d60 = zdf_d60;
+    // 涨跌家数是 "102/122" 这类原文，不转数字
+    if (typeof x.zgb === "string" && x.zgb !== "") b.zgb_raw = x.zgb;
+    out.push(b);
   }
   return out;
 }
@@ -163,6 +181,11 @@ export function rowsFromTencent(data: TencentMarketData): { rows: MarketRow[]; m
       close: b.close as number,
       prev_close: b.prevClose as number,
       pct: b.pct as number,
+      zljlr: b.zljlr,
+      zdf_d5: b.zdf_d5,
+      zdf_d20: b.zdf_d20,
+      zdf_d60: b.zdf_d60,
+      zgb_raw: b.zgb_raw,
     });
   }
   for (const code of ["sh000300", "sh000001"] as const) {
