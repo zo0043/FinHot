@@ -139,6 +139,10 @@ export interface ItemDetail extends ItemSummary {
   readingMode: "full" | "summary-only";
   author: string | null;
   language: string | null;
+  /** 方向判断：只有入选条目才带（A7：反事实条目永不出现在用户面）；null = 未入选或未判断，不渲染方向行。 */
+  direction: "bullish" | "bearish" | "neutral" | null;
+  /** 方向影响的板块（受控词表 sector key）；direction 为 null 时为空数组。 */
+  scope: string[];
   /** Chinese body (translation or Chinese original) and original body, whitelisted HTML. */
   body: { zh: string | null; original: string | null; zhKind: "translation" | "original" | null; complete: boolean } | null;
   outline: OutlineEntry[];

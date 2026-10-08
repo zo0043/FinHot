@@ -429,7 +429,7 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   // 失败不拖垮主流程——文章照常入库，台账记 failed。
   const direction = out.score !== null
     ? await judgeDirection({ title: out.titleZh, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
-        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, model: d.model, receiptId: d.receiptId, reused: d.reused }),
+        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, horizon: d.horizon, confidence: d.confidence, model: d.model, receiptId: d.receiptId, reused: d.reused }),
         (error: unknown) => {
           console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，台账记 failed）", articleId, error: String(error) }));
           return null;
@@ -453,10 +453,10 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     const stale = !current || current.revision !== input.revision;
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
-        subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, output)
+        subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, horizon, confidence, output)
       VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${ANALYZE_PROMPT_VERSION}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
-        ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${tx.json(detail as never)})
+        ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${direction?.horizon ?? null}, ${direction?.confidence ?? null}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
     if (out.score !== null) {
@@ -472,9 +472,10 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
         market_ctx: null,
         prior_ctx: null,
       };
-      await tx`INSERT INTO prediction_ledger (analyses_id, article_id, t0, prompt_version, model, direction, direction_status, scope, published, input_snapshot)
+      await tx`INSERT INTO prediction_ledger (analyses_id, article_id, t0, prompt_version, model, direction, direction_status, scope, horizon, confidence, published, input_snapshot)
         VALUES (${row!.id}, ${articleId}, now(), ${PROMPT_VERSIONS.directions}, ${direction?.model ?? w?.model ?? run.prefilter.model},
-          ${direction ? direction.direction : "none"}, ${direction ? "ok" : "failed"}, ${direction ? direction.scope : []}, ${out.selected}, ${tx.json(snapshot as never)})`;
+          ${direction ? direction.direction : "none"}, ${direction ? "ok" : "failed"}, ${direction ? direction.scope : []},
+          ${direction?.horizon ?? null}, ${direction?.confidence ?? null}, ${out.selected}, ${tx.json(snapshot as never)})`;
     }
     if (!stale) {
       await tx`UPDATE articles SET processing_state = ${out.relevance === "block" ? "blocked" : "analyzed"}, processing_error = NULL WHERE id = ${articleId}`;

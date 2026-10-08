@@ -5,6 +5,7 @@ import { SITE } from "@aihot/industry/site";
 import { toPublicApiCategory } from "@aihot/contracts/taxonomy";
 import { config } from "../config.ts";
 import { one, sql, type Tx } from "../db.ts";
+import { publicDirection } from "../editorial/direction.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { collapseWhitespace } from "../lib/text.ts";
 import { itemUrl } from "./links.ts";
@@ -42,6 +43,8 @@ interface AnalysisRow {
   selected: boolean | null;
   direction: string | null;
   scope: string[];
+  horizon: string | null;
+  confidence: number | null;
 }
 
 interface OverrideRow {
@@ -72,6 +75,8 @@ interface PublicationRow {
   seo_excluded_at: Date | null;
   direction: string | null;
   scope: string[];
+  horizon: string | null;
+  confidence: number | null;
 }
 
 export interface V1ItemPayload {
@@ -87,6 +92,10 @@ export interface V1ItemPayload {
   score: number | null;
   selected: boolean;
   reason: string | null;
+  /** 方向判断（bullish/bearish/neutral）：只有入选条目才带；反事实（未入选）条目永不出现在用户面，none/null → null。 */
+  direction: "bullish" | "bearish" | "neutral" | null;
+  /** 方向影响的板块（受控词表 sector key，最多 3 个）；direction 为 null 时为空数组。 */
+  scope: string[];
   attribution: { name: string; url: string };
 }
 
@@ -117,8 +126,11 @@ function round1(n: number | null): number | null {
 export function v1Payload(p: {
   articleId: string; title: string; originalTitle: string | null; summary: string | null; sourceName: string; url: string;
   publishedAt: Date | null; discoveredAt: Date; category: string | null; score: number | null; selected: boolean; reason: string | null;
+  direction: string | null; scope: string[];
 }): V1ItemPayload {
   const aihot = itemUrl(p.articleId);
+  // A7: only selected items carry direction on the user surface; none/null/unknown values are not sent.
+  const direction = p.selected ? publicDirection(p.direction) : null;
   return {
     id: p.articleId,
     title: p.title,
@@ -132,6 +144,8 @@ export function v1Payload(p: {
     score: p.score === null ? null : Math.round(p.score),
     selected: p.selected,
     reason: p.selected ? p.reason : null,
+    direction,
+    scope: direction ? p.scope : [],
     attribution: { name: SITE.name, url: aihot },
   };
 }
@@ -160,7 +174,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
     SELECT id, name, kind, tier, participation_mode, first_party, site_fulltext, syndicate_fulltext FROM sources WHERE id = ${article.source_id}`;
   if (!source) return null;
   const [analysis] = await tx<AnalysisRow[]>`
-    SELECT id, relevance, category, tags, subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope
+    SELECT id, relevance, category, tags, subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, horizon, confidence
     FROM analyses WHERE article_id = ${articleId} ORDER BY input_revision DESC, id DESC LIMIT 1`;
   const [override] = await tx<OverrideRow[]>`SELECT fields, visibility FROM editorial_overrides WHERE article_id = ${articleId}`;
   const [membership] = await tx<{ fact_id: number; story_id: number | null }[]>`
@@ -234,7 +248,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
   const next = {
     visibility, eligible, selected, title: title ?? collapseWhitespace(article.title), original_title: originalTitle, summary, reason,
     category, tags, score: round1(score), body_mode: bodyMode, story_id: membership?.story_id ?? null, fact_id: membership?.fact_id ?? null,
-    indexable, direction: analysis?.direction ?? null, scope: analysis?.scope ?? [],
+    indexable, direction: analysis?.direction ?? null, scope: analysis?.scope ?? [], horizon: analysis?.horizon ?? null, confidence: analysis?.confidence ?? null,
   };
   const changed =
     !previous ||
@@ -244,18 +258,18 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
         original_title: previous.original_title, summary: previous.summary, reason: previous.reason, category: previous.category,
         tags: [...previous.tags].sort(), score: previous.score === null ? null : Number(previous.score), body_mode: previous.body_mode,
         story_id: previous.story_id, fact_id: previous.fact_id, indexable: previous.indexable,
-        direction: previous.direction, scope: previous.scope,
+        direction: previous.direction, scope: previous.scope, horizon: previous.horizon, confidence: previous.confidence,
       });
   const revision = previous ? previous.revision + (changed ? 1 : 0) : 1;
 
   await tx`
     INSERT INTO publications (article_id, analysis_id, revision, visibility, eligible, selected, title, original_title, summary,
       reason, category, tags, score, source_id, channel, first_party, url, published_at, discovered_at, timeline_at, backfill,
-      selected_ready_at, visible_after, body_mode, syndicate, indexable, story_id, fact_id, search_text, sort_at, updated_at, direction, scope)
+      selected_ready_at, visible_after, body_mode, syndicate, indexable, story_id, fact_id, search_text, sort_at, updated_at, direction, scope, horizon, confidence)
     VALUES (${articleId}, ${analysis?.id ?? null}, ${revision}, ${visibility}, ${eligible}, ${selected}, ${next.title},
       ${originalTitle}, ${summary}, ${reason}, ${category}, ${tags}, ${next.score}, ${source.id}, ${channel}, ${source.first_party},
       ${article.url}, ${article.published_at}, ${article.discovered_at}, ${article.timeline_at}, ${article.backfill},
-      ${selectedReadyAt}, ${visibleAfter}, ${bodyMode}, ${syndicate}, ${indexable}, ${next.story_id}, ${next.fact_id}, ${searchText}, ${sortAt}, now(), ${next.direction}, ${next.scope})
+      ${selectedReadyAt}, ${visibleAfter}, ${bodyMode}, ${syndicate}, ${indexable}, ${next.story_id}, ${next.fact_id}, ${searchText}, ${sortAt}, now(), ${next.direction}, ${next.scope}, ${next.horizon}, ${next.confidence})
     ON CONFLICT (article_id) DO UPDATE SET
       analysis_id = EXCLUDED.analysis_id, revision = EXCLUDED.revision, visibility = EXCLUDED.visibility,
       eligible = EXCLUDED.eligible, selected = EXCLUDED.selected, title = EXCLUDED.title, original_title = EXCLUDED.original_title,
@@ -266,7 +280,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
       visible_after = EXCLUDED.visible_after, body_mode = EXCLUDED.body_mode, syndicate = EXCLUDED.syndicate,
       indexable = EXCLUDED.indexable, story_id = EXCLUDED.story_id, fact_id = EXCLUDED.fact_id,
       search_text = EXCLUDED.search_text, sort_at = EXCLUDED.sort_at, updated_at = now(),
-      direction = EXCLUDED.direction, scope = EXCLUDED.scope
+      direction = EXCLUDED.direction, scope = EXCLUDED.scope, horizon = EXCLUDED.horizon, confidence = EXCLUDED.confidence
     WHERE (publications.analysis_id, publications.revision, publications.visibility, publications.eligible,
         publications.selected, publications.title, publications.original_title, publications.summary,
         publications.reason, publications.category, publications.tags, publications.score,
@@ -274,7 +288,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
         publications.published_at, publications.discovered_at, publications.timeline_at, publications.backfill,
         publications.selected_ready_at, publications.visible_after, publications.body_mode, publications.syndicate,
         publications.indexable, publications.story_id, publications.fact_id, publications.search_text,
-        publications.sort_at, publications.direction, publications.scope)
+        publications.sort_at, publications.direction, publications.scope, publications.horizon, publications.confidence)
       IS DISTINCT FROM (EXCLUDED.analysis_id, EXCLUDED.revision, EXCLUDED.visibility, EXCLUDED.eligible,
         EXCLUDED.selected, EXCLUDED.title, EXCLUDED.original_title, EXCLUDED.summary,
         EXCLUDED.reason, EXCLUDED.category, EXCLUDED.tags, EXCLUDED.score,
@@ -282,7 +296,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
         EXCLUDED.published_at, EXCLUDED.discovered_at, EXCLUDED.timeline_at, EXCLUDED.backfill,
         EXCLUDED.selected_ready_at, EXCLUDED.visible_after, EXCLUDED.body_mode, EXCLUDED.syndicate,
         EXCLUDED.indexable, EXCLUDED.story_id, EXCLUDED.fact_id, EXCLUDED.search_text,
-        EXCLUDED.sort_at, EXCLUDED.direction, EXCLUDED.scope)`;
+        EXCLUDED.sort_at, EXCLUDED.direction, EXCLUDED.scope, EXCLUDED.horizon, EXCLUDED.confidence)`;
 
   // The pool search row follows eligibility; its body part only covers full text the site may show.
   if (eligible) {
@@ -311,6 +325,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
     const payload = v1Payload({
       articleId, title: next.title, originalTitle, summary, sourceName: source.name, url: article.url,
       publishedAt: article.published_at, discoveredAt: article.discovered_at, category, score: next.score, selected: true, reason,
+      direction: next.direction, scope: next.scope,
     });
     const payloadHash = sha256(stableJson(payload));
     if (!state || !state.in_set || state.payload_hash !== payloadHash) {

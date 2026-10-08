@@ -5,6 +5,7 @@ import { sql } from "../db.ts";
 import { proxyBodyImages } from "../media/imgproxy.ts";
 import { textToHtml } from "../content/sanitize.ts";
 import { ITEM_COLUMNS, ITEM_FROM, selectedCondition, toItemSummary, xView, type ItemRow } from "./items.ts";
+import { publicDirection } from "../editorial/direction.ts";
 import { itemUrl } from "./links.ts";
 import { hasItemPage } from "./rules.ts";
 import { SITE } from "@aihot/industry/site";
@@ -53,6 +54,9 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
 
   const summary = toItemSummary(row);
   if (row.channel === "x") summary.x = xView(row, false, true);
+  // A7: only selected items carry direction on the user surface; none/null is not sent.
+  const direction = row.selected ? publicDirection(row.direction) : null;
+  const scope = direction ? row.scope : [];
   if (row.visibility === "summary-only") {
     const detail: ItemDetail = {
       ...summary,
@@ -68,6 +72,8 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
       indexable: false,
       markdownAvailable: false,
       group: null,
+      direction,
+      scope,
     };
     return { kind: "found", detail, row };
   }
@@ -136,6 +142,8 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
     indexable: row.indexable,
     markdownAvailable: markdownAvailable(row),
     group,
+    direction,
+    scope,
   };
   return { kind: "found", detail, row };
 }

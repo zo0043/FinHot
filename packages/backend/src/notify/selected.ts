@@ -5,6 +5,7 @@ import { sql } from "../db.ts";
 import { sha256 } from "../lib/ids.ts";
 import { itemUrl } from "../publication/links.ts";
 import { CATEGORY_LABELS, type CategoryKey } from "@aihot/contracts/taxonomy";
+import { directionDisplay } from "../editorial/direction.ts";
 import { deliverContent } from "./deliver.ts";
 import { barkEnabled, pushBark } from "./bark.ts";
 import { SITE } from "@aihot/industry/site";
@@ -28,6 +29,8 @@ interface Row {
   source_name: string;
   url: string;
   score: number | null;
+  direction: string | null;
+  scope: string[];
   timeline_at: Date;
   discovered_at: Date;
   visible_after: Date | null;
@@ -42,7 +45,9 @@ function normalizedTitle(t: string) {
 
 function card(r: Row) {
   const category = r.category ? CATEGORY_LABELS[r.category] : null;
-  const lines = [r.summary, r.reason ? `**推荐理由**：${r.reason}` : null, `来源：${r.source_name}`].filter(Boolean);
+  // 入选条目的方向行（A7）：direction=none/null 时不展示。
+  const direction = directionDisplay(r.direction, r.scope);
+  const lines = [r.summary, r.reason ? `**推荐理由**：${r.reason}` : null, direction ? `方向：${direction}` : null, `来源：${r.source_name}`].filter(Boolean);
   return {
     header: { title: { tag: "plain_text", content: r.title }, template: "turquoise" },
     elements: [
@@ -62,7 +67,7 @@ function card(r: Row) {
 export async function pushSelected(articleId: string, now = new Date()): Promise<PushOutcome> {
   const [r] = await sql<Row[]>`
     SELECT p.article_id, p.selected, p.visibility, p.title, p.summary, p.reason, p.category, s.name AS source_name, p.url, p.score,
-           p.timeline_at, p.discovered_at, p.visible_after, p.backfill, p.fact_id,
+           p.direction, p.scope, p.timeline_at, p.discovered_at, p.visible_after, p.backfill, p.fact_id,
            coalesce((o.fields->>'silent')::boolean, false) AS silent
     FROM publications p JOIN sources s ON s.id = p.source_id LEFT JOIN editorial_overrides o ON o.article_id = p.article_id
     WHERE p.article_id = ${articleId}`;
@@ -99,7 +104,8 @@ async function maybePushBark(r: Row): Promise<void> {
   const mode = barkPushMode();
   if (mode === "off") return;
   if (mode === "t1" && (r.score ?? 0) < SELECTION.thresholds.T2) return;
-  const body = [r.summary?.slice(0, 120), r.reason ? `理由：${r.reason.slice(0, 60)}` : null, `来源：${r.source_name}`].filter(Boolean).join("\n");
+  const direction = directionDisplay(r.direction, r.scope);
+  const body = [r.summary?.slice(0, 120), r.reason ? `理由：${r.reason.slice(0, 60)}` : null, direction ? `方向：${direction}` : null, `来源：${r.source_name}`].filter(Boolean).join("\n");
   await pushBark(`📌 ${r.title}`, body, { group: "FinHot精选", url: itemUrl(r.article_id) }).catch((error) => {
     console.log(JSON.stringify({ level: "warn", msg: "Bark 入选推送失败（不影响飞书卡片）", articleId: r.article_id, error: String(error) }));
   });
