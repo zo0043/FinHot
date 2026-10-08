@@ -425,12 +425,13 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   if (waitsForPage(input)) return { analysisId: null, stale: false, needsBody: true, output: null, receiptIds: [], reused: true };
   const run = await runAnalysis(input, opts);
   const out = normalizeAnalysis(run);
-  // 事件方向步：只对入选事件跑。失败不拖垮主流程——无方向数据的文章照常入库。
-  const direction = out.selected
+  // 事件方向步：对所有已打分事件跑（入选 + 反事实，M1 全量口径，见 .agents/plans/FinHot-推演飞轮升级方案.md T0.4）。
+  // 失败不拖垮主流程——文章照常入库，台账记 failed。
+  const direction = out.score !== null
     ? await judgeDirection({ title: out.titleZh, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
-        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, model: d.model, receiptId: d.receiptId }),
+        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, model: d.model, receiptId: d.receiptId, reused: d.reused }),
         (error: unknown) => {
-          console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，无方向数据）", articleId, error: String(error) }));
+          console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，台账记 failed）", articleId, error: String(error) }));
           return null;
         },
       )
@@ -458,11 +459,28 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
         ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
+    if (out.score !== null) {
+      // M1 台账（T0.4）：与 analyses 行同事务——打过分 = 预测过，无论是否入选（反事实是 M1 的价值）。
+      const snapshot = {
+        title_zh: out.titleZh,
+        summary_zh: out.summaryZh?.slice(0, 400) ?? null,
+        category: out.category,
+        tags: out.tags,
+        source: input.source.name,
+        prompt_version: PROMPT_VERSIONS.directions,
+        model: direction?.model ?? w?.model ?? run.prefilter.model,
+        market_ctx: null,
+        prior_ctx: null,
+      };
+      await tx`INSERT INTO prediction_ledger (analyses_id, article_id, t0, prompt_version, model, direction, direction_status, scope, published, input_snapshot)
+        VALUES (${row!.id}, ${articleId}, now(), ${PROMPT_VERSIONS.directions}, ${direction?.model ?? w?.model ?? run.prefilter.model},
+          ${direction ? direction.direction : "none"}, ${direction ? "ok" : "failed"}, ${direction ? direction.scope : []}, ${out.selected}, ${tx.json(snapshot as never)})`;
+    }
     if (!stale) {
       await tx`UPDATE articles SET processing_state = ${out.relevance === "block" ? "blocked" : "analyzed"}, processing_error = NULL WHERE id = ${articleId}`;
     }
     return { analysisId: row!.id, stale };
   });
-  const reused = run.prefilter.reused && (run.scores?.reused ?? true) && (w?.reused ?? true) && (run.structure?.reused ?? true);
+  const reused = run.prefilter.reused && (run.scores?.reused ?? true) && (w?.reused ?? true) && (run.structure?.reused ?? true) && (direction?.reused ?? true);
   return { analysisId: committed.analysisId, stale: committed.stale, output: out, receiptIds, reused };
 }

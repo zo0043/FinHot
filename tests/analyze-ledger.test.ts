@@ -1,37 +1,41 @@
 // The judging and writing steps (editorial/analyze.ts): the prefilter decides relevance, two scores
 // against the tier threshold decide 精选, selected and near-selected items are written by the content
 // understanding and the rest by the title/summary prompts, a structure step gives the category, subjects
-// and fact. Material with only a feed summary has its page fetched first. The steps run on the models
-// AIHOT assigns them (set through the environment here); every prompt in the pack renders.
+// and fact. Every scored article — selected or not (the counterfactual is M1's point) — also gets a
+// direction judgment, and its prediction-ledger row is committed in the same transaction (T0.4).
+// Material with only a feed summary has its page fetched first. The steps run on the models AIHOT
+// assigns them (set through the environment here); every prompt in the pack renders.
 import { Reply, stub, tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { closeDb, sql } from "@aihot/backend/db";
 import { upsertMaterial } from "@aihot/backend/content/materials";
-import { analyzeArticle, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
+import { analyzeArticle, PROMPT_VERSIONS, SCORE_SYSTEM, tierThreshold } from "@aihot/backend/editorial/analyze";
+import { promptText } from "@aihot/backend/editorial/prompts";
 import { queueProcessing } from "@aihot/backend/jobs/content";
 import { QUEUES, stopBoss } from "@aihot/backend/jobs/queue";
 import { compactAnswerFirstSummary, enforceIdentity, parseTranslateOutput, PREFILTER_SYSTEM } from "@aihot/backend/editorial/writing";
-import { promptText } from "@aihot/backend/editorial/prompts";
 import { SITE } from "@aihot/industry/site";
 
 const T = tag();
 const SOURCE = `test-analyze-${T}`;
 const X_SOURCE = `test-analyze-x-${T}`;
+const T2_SOURCE = `test-analyze-t2-${T}`;
 
-type Step = "prefilter" | "score" | "understand" | "summarize" | "structure";
+type Step = "prefilter" | "score" | "understand" | "summarize" | "structure" | "direction";
 interface Req { step: Step; marker: string; system: string; user: string; body: Record<string, any> }
 const requests: Req[] = [];
-const MARKERS = ["CLEAR", "RESCUE", "LOW", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
-const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
+const MARKERS = ["CLEAR", "RESCUE", "LOW", "MID", "FLOOR", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
+const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], MID: [44, 39], FLOOR: [56, 50], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
 
 const stepOf = (system: string, user: string): Step =>
   system.includes("宽召回") ? "prefilter" : system.includes("事件注意力评分器") ? "score"
-  : system.includes("内容理解编辑") ? "understand" : system.includes("资料结构化助手") ? "structure"
+  : system.includes("事件方向判断器") ? "direction" : system.includes("内容理解编辑") ? "understand" : system.includes("资料结构化助手") ? "structure"
   : user.includes("title_zh") ? "summarize" : (() => { throw new Error("unknown request"); })();
 
-// One stub stands in for DashScope (prefilter, structure), Zhipu (score, understand) and DeepSeek (summarize).
+// One stub stands in for DashScope (prefilter, structure), Zhipu (score, understand, direction) and
+// DeepSeek (summarize).
 const provider = await stub((_hit, req) => {
   const body = JSON.parse(req.body) as { messages: Array<{ role: string; content: unknown }> } & Record<string, any>;
   const system = body.messages[0]!.role === "system" ? String(body.messages[0]!.content) : "";
@@ -40,6 +44,7 @@ const provider = await stub((_hit, req) => {
   const step = stepOf(system, user);
   const marker = MARKERS.find((m) => user.includes(m)) ?? "";
   requests.push({ step, marker, system, user, body });
+  if (process.env.T04_LOG) console.log("T04-REQ", step, marker);
   const answer = (content: unknown) => ({ id: `stub-${requests.length}`, model: "stub", choices: [{ message: { content: typeof content === "string" ? content : JSON.stringify(content) } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
   if (step === "prefilter") return answer({ label: marker === "OFFTOPIC" || marker === "BARE" ? "BLOCK" : marker === "VAGUE" ? "UNKNOWN" : "PASS", reason: "测试" });
   if (step === "score") return answer({ attentionScore: scoreAnswers[marker]!.shift() });
@@ -48,17 +53,22 @@ const provider = await stub((_hit, req) => {
     return answer({ itemType: "company_filing", authorRole: "principal", tags: ["行情/异动", "政策", "不存在的标签"], editorialJudgment: `理由 ${marker}`, titleZh: `理解标题 ${marker}`, summaryZh: `理解摘要 ${marker}。第二句补充一个关键数字。` });
   }
   if (step === "structure") return answer({ category: "market", tags: ["行情/异动", "政策"], subjects: ["moutai", "unknown-co"], fact: { title: `事实 ${marker}`, subject: "某公司", action: "发布", object: "公告", occurredAt: null } });
+  if (step === "direction") {
+    if (marker === "VAGUE") return new Reply(500, { error: { code: "stub", message: "stub direction failure" } });
+    return answer({ direction: "bullish", scope: ["政策"], note: "测试方向" });
+  }
   return answer(`title_zh: 翻译标题 ${marker}\nsummary_zh: 翻译摘要 ${marker}。第二句补充影响。`);
 });
 for (const env of ["DASHSCOPE_BASE_URL", "ZHIPU_BASE_URL", "DEEPSEEK_BASE_URL"]) process.env[env] = `${provider.url}/v1`;
 for (const env of ["DASHSCOPE_API_KEY", "ZHIPU_API_KEY", "DEEPSEEK_API_KEY"]) process.env[env] = "test-key";
 // AIHOT's own assignment of models to steps (the open-source default is one model for all of them).
-Object.assign(process.env, { PREFILTER_MODEL: "qwen3.7-flash", SCORE_MODEL: "glm-5.3-flash-selection", UNDERSTAND_MODEL: "glm-5.3-flash", SUMMARIZE_MODEL: "deepseek-flash", STRUCTURE_MODEL: "qwen3.8-flash" });
+Object.assign(process.env, { PREFILTER_MODEL: "qwen3.7-flash", SCORE_MODEL: "glm-5.3-flash-selection", UNDERSTAND_MODEL: "glm-5.3-flash", SUMMARIZE_MODEL: "deepseek-flash", STRUCTURE_MODEL: "qwen3.8-flash", DIRECTION_MODEL: "glm-5.3-flash" });
 
 before(async () => {
   await sql`INSERT INTO sources (id, name, kind, tier, participation_mode, next_fetch_at) VALUES
     (${SOURCE}, 'Test analyze source', 'rss', 'T1', 'editorial', '2100-01-01'),
-    (${X_SOURCE}, 'Test X account', 'x_search', 'T1', 'editorial', '2100-01-01')`;
+    (${X_SOURCE}, 'Test X account', 'x_search', 'T1', 'editorial', '2100-01-01'),
+    (${T2_SOURCE}, 'Test T2 source', 'web_list', 'T2', 'editorial', '2100-01-01')`;
 });
 after(async () => {
   await provider.close();
@@ -91,14 +101,19 @@ test("every prompt in the pack renders, and the site's name replaces AIHOT's", (
   assert.ok(PREFILTER_SYSTEM.startsWith(`为${SITE.name}做宽召回`));
 });
 
-test("a selected item: prefilter, two scores, the content understanding and the structure", async () => {
-  assert.equal(tierThreshold("T1"), 60);
+test("a selected item: prefilter, two scores, the content understanding, the structure, the direction", async () => {
+  assert.deepEqual([tierThreshold("T1"), tierThreshold("T1_5"), tierThreshold("T2")], [42, 48, 55]);
   const id = await article("CLEAR");
   const res = await analyzeArticle(id);
-  assert.deepEqual([res!.output!.selected, res!.output!.score], [true, 75], "78 + 72 = 150 >= 120");
-  assert.deepEqual(calls("CLEAR").sort(), ["prefilter", "score", "score", "structure", "understand"]);
+  assert.deepEqual([res!.output!.selected, res!.output!.score], [true, 75], "78 + 72 = 150 >= 84");
+  assert.deepEqual(calls("CLEAR").sort(), ["direction", "prefilter", "score", "score", "structure", "understand"]);
   const r = await row(id);
-  assert.deepEqual([r.title_zh, r.reason_zh, r.category, r.receipt_ids.length], ["理解标题 CLEAR", "理由 CLEAR", "market", 5]);
+  assert.deepEqual([r.title_zh, r.reason_zh, r.category], ["理解标题 CLEAR", "理由 CLEAR", "market"]);
+  // One write pass per historical revision: at least one of every step's purpose must be among the receipts.
+  const purposes = (await sql<{ purpose: string }[]>`SELECT DISTINCT purpose FROM receipts WHERE id IN (${r.receipt_ids})`).map((q) => q.purpose);
+  for (const purpose of ["prefilter/attention", "score/attention", "editorial/understand", "editorial/structure", "direction/subject"])
+    assert.ok(purposes.includes(purpose), `a ${purpose} receipt is committed`);
+  assert.ok(r.receipt_ids.length >= 6);
   assert.deepEqual(r.tags, ["行情/异动", "政策/监管", "贵州茅台"], "vocabulary tags (synonyms mapped, unknown dropped) and the subject's tag");
   assert.deepEqual(r.subjects, ["moutai"]);
   assert.deepEqual([r.output.writer, r.output.itemType, r.output.prefilter.label, r.output.fact.title], ["understand", "company_filing", "PASS", "事实 CLEAR"]);
@@ -112,33 +127,43 @@ test("a selected item: prefilter, two scores, the content understanding and the 
   assert.ok(JSON.parse(prefilter.user).includes("【材料质量】"), "the material context, sent as a JSON string");
 });
 
-test("a near-selected item is written like a selected one; below the floor it is translated", async () => {
+test("selected items are understood; near the line they are translated; the T2 floor still understands", async () => {
   const near = await analyzeArticle(await article("RESCUE"));
-  assert.deepEqual([near!.output!.selected, near!.output!.reasonZh], [false, "理由 RESCUE"], "56 + 50 = 106 > 100");
+  assert.deepEqual([near!.output!.selected, near!.output!.reasonZh], [true, "理由 RESCUE"], "56 + 50 = 106 >= 84, selected items are always understood");
   const lowId = await article("LOW");
   const low = await analyzeArticle(lowId);
-  assert.deepEqual([low!.output!.selected, low!.output!.titleZh, low!.output!.reasonZh], [false, "翻译标题 LOW", null]);
-  assert.deepEqual(calls("LOW").sort(), ["prefilter", "score", "score", "structure", "summarize"]);
-  const summarize = requests.find((q) => q.marker === "LOW" && q.step === "summarize")!;
+  assert.deepEqual([low!.output!.selected, low!.output!.titleZh, low!.output!.reasonZh], [true, "理解标题 LOW", "理由 LOW"], "45 + 40 = 85 >= 84");
+  const midId = await article("MID");
+  const mid = await analyzeArticle(midId);
+  assert.deepEqual([mid!.output!.selected, mid!.output!.titleZh, mid!.output!.reasonZh], [false, "翻译标题 MID", null], "44 + 39 = 83 < 84, mean 41.5 < 50");
+  assert.deepEqual(calls("MID").sort(), ["direction", "prefilter", "score", "score", "structure", "summarize"]);
+  const summarize = requests.find((q) => q.marker === "MID" && q.step === "summarize")!;
   assert.equal(summarize.body.messages.length, 1, "the title/summary prompt is one user message");
   assert.equal(summarize.body.response_format, undefined, "answered in its own text format");
-  assert.deepEqual((await row(lowId)).tags, ["行情/异动", "政策/监管", "贵州茅台"], "structure tags");
+  assert.deepEqual((await row(midId)).tags, ["行情/异动", "政策/监管", "贵州茅台"], "structure tags");
+  // The understand floor on a stricter T2 source (2 × 55): 56 + 50 = 106 < 110, mean 53 >= 50.
+  const floorId = await article("FLOOR", { sourceId: T2_SOURCE });
+  const floor = await analyzeArticle(floorId);
+  assert.deepEqual([floor!.output!.selected, floor!.output!.titleZh, floor!.output!.reasonZh], [false, "理解标题 FLOOR", "理由 FLOOR"], "near misses on T2 are still written in the editorial style");
+  assert.deepEqual(calls("FLOOR").sort(), ["direction", "prefilter", "score", "score", "structure", "understand"]);
 });
 
 test("the prefilter's BLOCK stops everything; UNKNOWN goes on like PASS", async () => {
   const off = await analyzeArticle(await article("OFFTOPIC"));
   assert.deepEqual([off!.output!.relevance, off!.output!.selected], ["block", false]);
   assert.deepEqual(calls("OFFTOPIC"), ["prefilter"]);
-  // An UNKNOWN with material is judged and written like a PASS, up to 精选 (60 + 62 ≥ 2 × 60).
+  // An UNKNOWN with material is judged and written like a PASS (60 + 62 = 122 >= 84).
   const vagueId = await article("VAGUE");
   const vague = await analyzeArticle(vagueId);
-  assert.deepEqual([vague!.output!.relevance, vague!.output!.selected, vague!.output!.titleZh], ["pass", true, "理解标题 VAGUE"]);
+  assert.deepEqual([vague!.output!.relevance, vague!.output!.selected, vague!.output!.titleZh], ["unknown", true, "理解标题 VAGUE"], "an UNKNOWN with material is judged and written like a PASS");
   assert.equal((await row(vagueId)).output.prefilter.label, "UNKNOWN", "the prefilter's own answer stays on record");
+  // Its direction call failed: the article is still committed, and the ledger records the failure.
+  const [vLedger] = await sql<{ direction: string; direction_status: string }[]>`SELECT direction, direction_status FROM prediction_ledger WHERE article_id = ${vagueId}`;
+  assert.deepEqual([vLedger!.direction, vLedger!.direction_status], ["none", "failed"], "a failed direction is a failed prediction, not a missing one");
   // Nothing but a title and no page to fetch: the BLOCK counts as UNKNOWN and is scored, but the
   // translation writes nothing from a bare title, so it waits for material instead of being published.
-  const bare = await analyzeArticle(await article("BARE", { bodyText: null, excerpt: null, bodyStatus: "none" }));
-  assert.deepEqual([bare!.output!.relevance, bare!.output!.selected, bare!.output!.score], ["unknown", false, 32]);
-  assert.deepEqual(calls("BARE").sort(), ["prefilter", "score", "score", "structure"]);
+  const bare = await analyzeArticle(await article("BARE", { bodyText: null, excerpt: null, bodyStatus: "none" }));  assert.deepEqual([bare!.output!.relevance, bare!.output!.selected, bare!.output!.score], ["unknown", false, 32]);
+  assert.deepEqual(calls("BARE").sort(), ["direction", "prefilter", "score", "score", "structure"]);
 });
 
 test("a feed summary alone: the article page is fetched first, then the whole article is judged", async () => {
@@ -153,7 +178,7 @@ test("a feed summary alone: the article page is fetched first, then the whole ar
   assert.deepEqual(calls("THIN"), [], "no model call before the page");
   assert.equal((await sql`SELECT 1 FROM analyses WHERE article_id = ${id}`).length, 0, "nothing committed");
   // What extraction does: the body lands as a new revision.
-  await sql`UPDATE articles SET body_text = ${`THIN: ${LONG} (${T}) full page`}, body_status = 'ok', revision = revision + 1 WHERE id = ${id}`;
+  await sql`UPDATE articles SET body_text = ${`THIN: ${LONG} (${T})`}, body_status = 'ok', revision = revision + 1 WHERE id = ${id}`;
   const second = await analyzeArticle(id);
   assert.deepEqual([second!.needsBody ?? false, second!.output!.selected], [false, true]);
 });
@@ -184,6 +209,33 @@ test("guards: a company the input does not name is not written in; long summarie
   assert.ok(compactAnswerFirstSummary(long).length <= 190);
   assert.deepEqual(parseTranslateOutput("title_zh: 标题\nsummary_zh: 第一句。\n第二句。"), { titleZh: "标题", summaryZh: "第一句。\n第二句。", bodyZh: "" });
   assert.equal(parseTranslateOutput("title_zh: 标题\nbody_zh: 我们懂你。\n\n来源：X：PixVerse (@PixVerse)").bodyZh, "我们懂你。", "a repeated prompt line is dropped");
+});
+
+test("the prediction ledger records every scored article: selected and counterfactual", async () => {
+  scoreAnswers.CLEAR = [78, 72];
+  scoreAnswers.MID = [44, 39];
+  const selId = await article("CLEAR", { url: `https://example.com/CLEAR-ledger-${T}`, title: `CLEAR ledger ${T}` });
+  const midId = await article("MID", { url: `https://example.com/MID-ledger-${T}`, title: `MID ledger ${T}` });
+  await analyzeArticle(selId);
+  await analyzeArticle(midId);
+  const rows = await sql<{ article_id: string; direction: string; direction_status: string; published: boolean; prompt_version: string; model: string; t0: Date | null; snapshot: Record<string, unknown> }[]>`
+    SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot
+    FROM prediction_ledger WHERE article_id IN (${[selId, midId]})`;
+  assert.equal(rows.length, 2, "one row per scored article");
+  const sel = rows.find((r) => r.article_id === selId)!;
+  const mid = rows.find((r) => r.article_id === midId)!;
+  assert.deepEqual([sel!.direction, sel!.direction_status, sel!.published], ["bullish", "ok", true]);
+  assert.deepEqual([mid!.direction, mid!.direction_status, mid!.published], ["bullish", "ok", false], "counterfactual: scored, not selected, still predicted");
+  for (const r of [sel!, mid!]) {
+    assert.equal(r.prompt_version, PROMPT_VERSIONS.directions);
+    assert.ok(r.model && r.t0);
+    assert.equal(r.snapshot.market_ctx, null, "no market context yet (M3)");
+    assert.equal(r.snapshot.prior_ctx, null, "no priors yet (M2)");
+    assert.equal(r.snapshot.source, "Test analyze source");
+  }
+  const offId = await article("OFFTOPIC", { url: `https://example.com/OFFTOPIC-ledger-${T}`, title: `OFFTOPIC ledger ${T}` });
+  await analyzeArticle(offId);
+  assert.equal((await sql`SELECT 1 FROM prediction_ledger WHERE article_id = ${offId}`).length, 0, "block → no prediction");
 });
 
 test("analysing the same revision again reuses every paid answer", async () => {
