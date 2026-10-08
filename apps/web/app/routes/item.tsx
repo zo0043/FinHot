@@ -1,4 +1,5 @@
 import { SITE, withSubject } from "@aihot/industry/site";
+import { SECTOR_BY_KEY } from "@aihot/industry/sectors";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLoaderData, useNavigate } from "react-router";
 import type { Route } from "./+types/item";
@@ -95,6 +96,22 @@ async function shareOrCopy(item: Pick<SiteItemDetail, "id" | "title">): Promise<
   }
 }
 
+/** 方向文案（与后端 editorial/direction.ts 的 DIRECTION_USER_LABELS 保持一致）；后端只给 selected 条目下发方向，none/null 到这里已是 null。 */
+const DIRECTION_LABELS: Record<string, string> = { bullish: "利好", bearish: "利空", neutral: "中性" };
+
+/** 入选卡片的方向行：「方向：利好 · 板块：半导体/算力、AI 应用/软件」；不展示时渲染 null。 */
+function DirectionLine({ direction, scope }: { direction: string | null; scope: string[] }) {
+  const label = direction ? DIRECTION_LABELS[direction] : null;
+  if (!label) return null;
+  const sectors = scope.map((k) => SECTOR_BY_KEY.get(k)?.label ?? k).filter((s) => s !== "");
+  return (
+    <span className="text-[12px] text-ink-3">
+      方向：{label}
+      {sectors.length > 0 && <span> · 板块：{sectors.join("、")}</span>}
+    </span>
+  );
+}
+
 export default function ItemPage() {
   const { item } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -183,9 +200,10 @@ export default function ItemPage() {
     </div>
   );
   const verdict = (item.selected || item.score !== null) && (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {item.selected && <SelectedBadge />}
       <ScoreLabel score={item.score} />
+      {item.selected && <DirectionLine direction={item.direction} scope={item.scope} />}
     </div>
   );
 
@@ -297,6 +315,11 @@ export default function ItemPage() {
             {item.score !== null && (
               <span className="ml-1 lg:hidden">
                 <ScoreLabel score={item.score} />
+              </span>
+            )}
+            {item.selected && (
+              <span className="ml-1 lg:hidden">
+                <DirectionLine direction={item.direction} scope={item.scope} />
               </span>
             )}
           </div>

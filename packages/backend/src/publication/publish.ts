@@ -5,6 +5,7 @@ import { SITE } from "@aihot/industry/site";
 import { toPublicApiCategory } from "@aihot/contracts/taxonomy";
 import { config } from "../config.ts";
 import { one, sql, type Tx } from "../db.ts";
+import { publicDirection } from "../editorial/direction.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { collapseWhitespace } from "../lib/text.ts";
 import { itemUrl } from "./links.ts";
@@ -91,6 +92,10 @@ export interface V1ItemPayload {
   score: number | null;
   selected: boolean;
   reason: string | null;
+  /** 方向判断（bullish/bearish/neutral）：只有入选条目才带；反事实（未入选）条目永不出现在用户面，none/null → null。 */
+  direction: "bullish" | "bearish" | "neutral" | null;
+  /** 方向影响的板块（受控词表 sector key，最多 3 个）；direction 为 null 时为空数组。 */
+  scope: string[];
   attribution: { name: string; url: string };
 }
 
@@ -121,8 +126,11 @@ function round1(n: number | null): number | null {
 export function v1Payload(p: {
   articleId: string; title: string; originalTitle: string | null; summary: string | null; sourceName: string; url: string;
   publishedAt: Date | null; discoveredAt: Date; category: string | null; score: number | null; selected: boolean; reason: string | null;
+  direction: string | null; scope: string[];
 }): V1ItemPayload {
   const aihot = itemUrl(p.articleId);
+  // A7: only selected items carry direction on the user surface; none/null/unknown values are not sent.
+  const direction = p.selected ? publicDirection(p.direction) : null;
   return {
     id: p.articleId,
     title: p.title,
@@ -136,6 +144,8 @@ export function v1Payload(p: {
     score: p.score === null ? null : Math.round(p.score),
     selected: p.selected,
     reason: p.selected ? p.reason : null,
+    direction,
+    scope: direction ? p.scope : [],
     attribution: { name: SITE.name, url: aihot },
   };
 }
@@ -315,6 +325,7 @@ export async function publishArticleTx(tx: Tx, articleId: string, options: Publi
     const payload = v1Payload({
       articleId, title: next.title, originalTitle, summary, sourceName: source.name, url: article.url,
       publishedAt: article.published_at, discoveredAt: article.discovered_at, category, score: next.score, selected: true, reason,
+      direction: next.direction, scope: next.scope,
     });
     const payloadHash = sha256(stableJson(payload));
     if (!state || !state.in_set || state.payload_hash !== payloadHash) {

@@ -29,6 +29,7 @@ export function rowToV1(row: ApiItemRow): V1ItemPayload {
     articleId: row.id, title: row.title, originalTitle: row.original_title, summary: row.summary, sourceName: row.source_name,
     url: row.url, publishedAt: row.published_at, discoveredAt: row.discovered_at, category: row.category,
     score: row.score === null ? null : Number(row.score), selected: row.selected, reason: row.reason,
+    direction: row.direction, scope: row.scope,
   });
 }
 

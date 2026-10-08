@@ -56,6 +56,25 @@ export function sanitizeScope(raw: readonly string[]): string[] {
 
 export const DIRECTION_LABELS: Record<DirectionLabel, string> = { bullish: "偏多", bearish: "偏空", neutral: "中性", none: "未判断" };
 
+// 用户面方向文案（飞书卡片 / bark / web 方向展示共用）：只有 bullish/bearish/neutral 三个值有文案。
+export const DIRECTION_USER_LABELS: Record<"bullish" | "bearish" | "neutral", string> = { bullish: "利好", bearish: "利空", neutral: "中性" };
+
+/**
+ * 用户面方向透出闸门（硬约束 A7：只有 selected 条目才带方向；台账里的反事实预测永不出现在用户面）。
+ * 未判断（none/null）或未知值一律归 null（不展示方向行）。
+ */
+export function publicDirection(direction: string | null | undefined): "bullish" | "bearish" | "neutral" | null {
+  return direction === "bullish" || direction === "bearish" || direction === "neutral" ? direction : null;
+}
+
+/** 用户面方向行：「利好 · 板块：半导体/算力、AI 应用/软件」；scope 是受控词表 key，映射成板块名，未知 key 原样保留；不展示时返回 null。 */
+export function directionDisplay(direction: string | null | undefined, scope: readonly string[] = []): string | null {
+  const dir = publicDirection(direction);
+  if (!dir) return null;
+  const names = scope.map((k) => SECTOR_BY_KEY.get(k)?.label ?? k).filter((n) => n !== "");
+  return names.length > 0 ? `${DIRECTION_USER_LABELS[dir]} · 板块：${names.join("、")}` : DIRECTION_USER_LABELS[dir];
+}
+
 /** 只读 SQL 预填 scope（P5 历史相似检索也会用）：按板块 key 找日频数据。 */
 export async function directionForArticle(articleId: string): Promise<{ direction: DirectionLabel | null; scope: string[] } | null> {
   const [row] = await sql<{ direction: DirectionLabel | null; scope: string[] | null }[]>`SELECT direction, scope FROM analyses WHERE article_id = ${articleId} ORDER BY id DESC LIMIT 1`;

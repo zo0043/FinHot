@@ -42,14 +42,15 @@ after(async () => {
 });
 
 let n = 0;
-/** A selected article with full text and a summary. */
-async function article(): Promise<string> {
+/** A selected article with full text and a summary; opts let a test exercise direction exposure (A7). */
+async function article(opts: { direction?: string | null; scope?: string[]; selected?: boolean; score?: number } = {}): Promise<string> {
   n += 1;
   const { articleId } = await upsertMaterial({
     sourceId: SOURCE, url: `https://example.com/${T}-${n}`, title: `Test ${n}`, bodyText: BODY, bodyHtml: `<p>${BODY}</p>`, bodyStatus: "ok", via: "fetch", publishedAt: new Date(),
   });
-  await sql`INSERT INTO analyses (article_id, input_revision, origin, relevance, category, title_zh, summary_zh, reason_zh, score, selected)
-            VALUES (${articleId}, 1, 'rule', 'pass', 'market', ${`标题${n}-${T}`}, ${`SUMMARY-${n}-${T}`}, '理由', 90, true)`;
+  const { direction = null, scope = [], selected = true, score = 90 } = opts;
+  await sql`INSERT INTO analyses (article_id, input_revision, origin, relevance, category, title_zh, summary_zh, reason_zh, score, selected, direction, scope)
+            VALUES (${articleId}, 1, 'rule', 'pass', 'market', ${`标题${n}-${T}`}, ${`SUMMARY-${n}-${T}`}, '理由', ${score}, ${selected}, ${direction}, ${scope})`;
   return articleId;
 }
 
@@ -68,6 +69,49 @@ async function get(url: string, headers: Record<string, string> = {}) {
   const res = await app.inject({ method: "GET", url, headers });
   return { status: res.statusCode, body: res.body, etag: res.headers.etag as string | undefined };
 }
+
+test("v1 exposes direction only for selected items: counterfactual and none never reach the user surface", async () => {
+  const withDir = await article({ direction: 'bullish', scope: ['semicap', 'ai-app'] });
+  const none = await article({ direction: 'none', scope: ['liquor'] });
+  const counterfactual = await article({ direction: 'bearish', scope: ['bank'], selected: false, score: 40 }); // 反事实：方向已判但未入选
+  await publishArticle(withDir, released());
+  await publishArticle(none, released());
+  await publishArticle(counterfactual, released());
+
+  const items = async (url: string) => {
+    const body = JSON.parse((await get(url)).body) as { items: Array<Record<string, unknown>> };
+    return Object.fromEntries(body.items.map((i) => [i.id, i]));
+  };
+  const selected = await items('/api/v1/items?mode=selected&window=24h');
+  const all = await items('/api/v1/items?mode=all&window=24h');
+
+  assert.equal(selected[withDir]?.direction, 'bullish', 'selected item carries its direction');
+  assert.deepEqual(selected[withDir]?.scope, ['semicap', 'ai-app']);
+  assert.equal(all[none]?.direction, null, 'direction=none is not sent to the user surface');
+  assert.deepEqual(all[none]?.scope, []);
+  assert.equal(all[counterfactual]?.direction, null, 'counterfactual (not selected) never carries a direction');
+  assert.deepEqual(all[counterfactual]?.scope, []);
+
+  // The selected sync ledger stores the same user-facing projection.
+  const [entry] = await sql<{ payload: { direction: string | null; scope: string[] } }[]>`
+    SELECT payload FROM selected_ledger WHERE article_id = ${withDir} AND op = 'upsert' ORDER BY seq DESC LIMIT 1`;
+  assert.equal(entry!.payload.direction, 'bullish');
+  assert.deepEqual(entry!.payload.scope, ['semicap', 'ai-app']);
+  const [noneEntry] = await sql<{ payload: { direction: string | null; scope: string[] } | null }[]>`
+    SELECT payload FROM selected_ledger WHERE article_id = ${none} AND op = 'upsert' ORDER BY seq DESC LIMIT 1`;
+  assert.equal(noneEntry!.payload?.direction, null, 'the ledger payload of a none-direction item carries no direction');
+  assert.deepEqual(noneEntry!.payload?.scope, []);
+
+  // The site item detail follows the same rule: selected carries direction, the counterfactual does not.
+  const detail = async (id: string) => JSON.parse((await get(`/api/site/items/${id}`)).body) as { direction: string | null; scope: string[]; selected: boolean };
+  assert.equal((await detail(withDir)).direction, 'bullish');
+  assert.deepEqual((await detail(withDir)).scope, ['semicap', 'ai-app']);
+  assert.equal((await detail(none)).direction, null);
+  const cf = await detail(counterfactual);
+  assert.equal(cf.selected, false);
+  assert.equal(cf.direction, null, 'the detail page of a not-selected item never shows a direction');
+  assert.deepEqual(cf.scope, []);
+});
 
 test("site reading sends one language while exports retain both, including after withdrawal", async () => {
   const id = await article();
