@@ -26,8 +26,8 @@ const T2_SOURCE = `test-analyze-t2-${T}`;
 type Step = "prefilter" | "score" | "understand" | "summarize" | "structure" | "direction";
 interface Req { step: Step; marker: string; system: string; user: string; body: Record<string, any> }
 const requests: Req[] = [];
-const MARKERS = ["CLEAR", "RESCUE", "LOW", "MID", "FLOOR", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文"];
-const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], MID: [44, 39], FLOOR: [56, 50], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62] };
+const MARKERS = ["CLEAR", "RESCUE", "LOW", "MID", "FLOOR", "OFFTOPIC", "BARE", "VAGUE", "THIN", "SENSITIVE", "推文", "BADH"];
+const scoreAnswers: Record<string, number[]> = { CLEAR: [78, 72], RESCUE: [56, 50], LOW: [45, 40], MID: [44, 39], FLOOR: [56, 50], THIN: [70, 70], SENSITIVE: [80, 80], 推文: [40, 40], BARE: [30, 34], VAGUE: [60, 62], BADH: [78, 72] };
 
 const stepOf = (system: string, user: string): Step =>
   system.includes("宽召回") ? "prefilter" : system.includes("事件注意力评分器") ? "score"
@@ -55,7 +55,8 @@ const provider = await stub((_hit, req) => {
   if (step === "structure") return answer({ category: "market", tags: ["行情/异动", "政策"], subjects: ["moutai", "unknown-co"], fact: { title: `事实 ${marker}`, subject: "某公司", action: "发布", object: "公告", occurredAt: null } });
   if (step === "direction") {
     if (marker === "VAGUE") return new Reply(500, { error: { code: "stub", message: "stub direction failure" } });
-    return answer({ direction: "bullish", scope: ["政策"], note: "测试方向" });
+    if (marker === "BADH") return answer({ direction: "bullish", scope: ["政策"], note: "测试方向", primary_horizon: "weekly", confidence: "72" });
+    return answer({ direction: "bullish", scope: ["政策"], note: "测试方向", primary_horizon: "t3", confidence: 72, horizon_reason: "测试理由" });
   }
   return answer(`title_zh: 翻译标题 ${marker}\nsummary_zh: 翻译摘要 ${marker}。第二句补充影响。`);
 });
@@ -106,6 +107,7 @@ test("a selected item: prefilter, two scores, the content understanding, the str
   const id = await article("CLEAR");
   const res = await analyzeArticle(id);
   assert.deepEqual([res!.output!.selected, res!.output!.score], [true, 75], "78 + 72 = 150 >= 84");
+  if (process.env.T04_LOG) console.log("# T04-ALL " + JSON.stringify(requests));
   assert.deepEqual(calls("CLEAR").sort(), ["direction", "prefilter", "score", "score", "structure", "understand"]);
   const r = await row(id);
   assert.deepEqual([r.title_zh, r.reason_zh, r.category], ["理解标题 CLEAR", "理由 CLEAR", "market"]);
@@ -218,8 +220,8 @@ test("the prediction ledger records every scored article: selected and counterfa
   const midId = await article("MID", { url: `https://example.com/MID-ledger-${T}`, title: `MID ledger ${T}` });
   await analyzeArticle(selId);
   await analyzeArticle(midId);
-  const rows = await sql<{ article_id: string; direction: string; direction_status: string; published: boolean; prompt_version: string; model: string; t0: Date | null; snapshot: Record<string, unknown> }[]>`
-    SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot
+  const rows = await sql<{ article_id: string; direction: string; direction_status: string; published: boolean; prompt_version: string; model: string; t0: Date | null; snapshot: Record<string, unknown>; horizon: string | null; confidence: number | null }[]>`
+    SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot, horizon, confidence
     FROM prediction_ledger WHERE article_id IN (${[selId, midId]})`;
   assert.equal(rows.length, 2, "one row per scored article");
   const sel = rows.find((r) => r.article_id === selId)!;
@@ -232,10 +234,25 @@ test("the prediction ledger records every scored article: selected and counterfa
     assert.equal(r.snapshot.market_ctx, null, "no market context yet (M3)");
     assert.equal(r.snapshot.prior_ctx, null, "no priors yet (M2)");
     assert.equal(r.snapshot.source, "Test analyze source");
+    assert.deepEqual([r.horizon, r.confidence], ["t3", 72], "the direction's v2 fields land in the ledger");
+    const [a] = await sql<{ horizon: string | null; confidence: number | null }[]>`SELECT horizon, confidence FROM analyses WHERE article_id = ${r.article_id} ORDER BY id DESC LIMIT 1`;
+    assert.deepEqual([a!.horizon, a!.confidence], ["t3", 72], "the analyses row mirrors the same v2 fields");
   }
   const offId = await article("OFFTOPIC", { url: `https://example.com/OFFTOPIC-ledger-${T}`, title: `OFFTOPIC ledger ${T}` });
   await analyzeArticle(offId);
   assert.equal((await sql`SELECT 1 FROM prediction_ledger WHERE article_id = ${offId}`).length, 0, "block → no prediction");
+});
+
+test("a direction with invalid v2 fields still predicts: the fields degrade to null, not failed", async () => {
+  const badId = await article("BADH", { url: `https://example.com/BADH-ledger-${T}`, title: `BADH ledger ${T}` });
+  const bad = await analyzeArticle(badId);
+  assert.ok(bad!.output, "an invalid horizon must not throw or drop the article");
+  const [bLedger] = await sql<{ direction: string; direction_status: string; horizon: string | null; confidence: number | null }[]>`
+    SELECT direction, direction_status, horizon, confidence FROM prediction_ledger WHERE article_id = ${badId}`;
+  assert.deepEqual([bLedger!.direction, bLedger!.direction_status, bLedger!.horizon, bLedger!.confidence],
+    ["bullish", "ok", null, 72], "invalid horizon → null; a numeric-string confidence is still coerced");
+  const [bAnalysis] = await sql<{ horizon: string | null; confidence: number | null }[]>`SELECT horizon, confidence FROM analyses WHERE article_id = ${badId} ORDER BY id DESC LIMIT 1`;
+  assert.deepEqual([bAnalysis!.horizon, bAnalysis!.confidence], [null, 72], "the analyses row degrades the same way");
 });
 
 test("analysing the same revision again reuses every paid answer", async () => {

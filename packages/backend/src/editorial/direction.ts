@@ -9,20 +9,36 @@ import { promptText } from "./prompts.ts";
 import { modelFor } from "./models.ts";
 
 export type DirectionLabel = "bullish" | "bearish" | "neutral" | "none";
+export type DirectionHorizon = "t1" | "t3" | "t5";
 
 export interface DirectionResult {
   direction: DirectionLabel;
   scope: string[];
   note: string;
+  /** v2（0041）：主判定窗口，相对事件公布后首个交易日 T0 的 T+1/T+3/T+5；缺失/非法 → null。 */
+  horizon: DirectionHorizon | null;
+  /** v2（0041）：0-100 整数置信度；缺失/非法 → null。验收是 ≥95% 新预测有值，不是 100%，所以容错不拒绝。 */
+  confidence: number | null;
   model: string;
   receiptId: number;
   reused: boolean;
 }
 
-const DirectionSchema = z.object({
+export const DirectionSchema = z.object({
   direction: z.enum(["bullish", "bearish", "neutral", "none"]).catch("none"),
   scope: z.array(z.string().max(40)).max(3).catch([]),
   note: z.string().max(40).catch(""),
+  // v2：horizon/confidence 宽松校验——缺失/非法 → null 容错（不 reject：验收 ≥95% 而非 100%，
+  // 坏输出不能把整条预测拖成 failed）。
+  primary_horizon: z.enum(["t1", "t3", "t5"]).catch(null),
+  // 模型偶尔把整数写成字符串（"68"）或空值；coerce 收下合法数字串，null/空串/非法一律归 null（Number(null)=0 会误判成 0 分，先归一成 null）。
+  // .default(null)：key 整体缺失时 zod 4 跳过属性 schema 直接留 undefined，default 把「缺失」也归一成 null（契约：缺失/非法 → null）。
+  confidence: z.preprocess(
+    (v) => (v == null || v === "" ? null : v),
+    z.coerce.number().int().min(0).max(100).nullish().catch(null).default(null),
+  ),
+  // 只用于输出质量（为什么选这个窗口），不落库。
+  horizon_reason: z.string().max(100).catch(""),
 });
 
 export interface DirectionInput {
@@ -63,5 +79,5 @@ export async function judgeDirection(input: DirectionInput, opts: { attemptTag?:
     timeoutMs: opts.timeoutMs ?? 30_000,
     attemptTag: opts.attemptTag,
   });
-  return { direction: res.data.direction, scope: sanitizeScope(res.data.scope), note: res.data.note.trim(), model: res.model, receiptId: res.receiptId, reused: res.reused };
+  return { direction: res.data.direction, scope: sanitizeScope(res.data.scope), note: res.data.note.trim(), horizon: res.data.primary_horizon, confidence: res.data.confidence, model: res.model, receiptId: res.receiptId, reused: res.reused };
 }
