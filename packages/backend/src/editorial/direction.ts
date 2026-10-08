@@ -30,7 +30,9 @@ export const DirectionSchema = z.object({
   note: z.string().max(40).catch(""),
   // v2：horizon/confidence 宽松校验——缺失/非法 → null 容错（不 reject：验收 ≥95% 而非 100%，
   // 坏输出不能把整条预测拖成 failed）。
-  primary_horizon: z.enum(["t1", "t3", "t5"]).catch(null),
+  // .nullish().catch(null).default(null)：与下面 confidence 同一写法（zod 4.6.5 里裸 .catch(null) 对非空输出类型
+  // 过不了类型检查）；语义不变：缺失/显式 null/非法 → null，合法 t1/t3/t5 原样通过。
+  primary_horizon: z.enum(["t1", "t3", "t5"]).nullish().catch(null).default(null),
   // 模型偶尔把整数写成字符串（"68"）或空值；coerce 收下合法数字串，null/空串/非法一律归 null（Number(null)=0 会误判成 0 分，先归一成 null）。
   // .default(null)：key 整体缺失时 zod 4 跳过属性 schema 直接留 undefined，default 把「缺失」也归一成 null（契约：缺失/非法 → null）。
   confidence: z.preprocess(
