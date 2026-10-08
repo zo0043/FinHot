@@ -1,7 +1,9 @@
--- 0040 applied to finhot_ci with two fixes vs the committed file (see handoff):
+-- 0040：预测台账 + market_daily 行情富化（T0.4 方向全量化的地基）。
+-- 注：原文件是手工 CI 应用变体（内嵌 BEGIN/COMMIT + 自插 schema_migrations 行，
+-- 会提前提交 migrate.ts 的外层事务并造成重复键）；已改为与其他迁移一致：
+-- 纯 DDL，由 scripts/migrate.ts 统一记账。保留两个手工修正：
 --   1) article_id: uuid -> text (articles.id is text; uuid FK cannot be implemented)
 --   2) baseline_ref COMMENT: double-quoted string -> single-quoted (SQL syntax error)
-BEGIN;
 CREATE TABLE prediction_ledger (
   id bigserial PRIMARY KEY,
   analyses_id bigint NOT NULL UNIQUE REFERENCES analyses(id),
@@ -46,5 +48,3 @@ COMMENT ON COLUMN market_daily.zljlr IS '主力净流入（元），腾讯 rank 
 COMMENT ON COLUMN market_daily.zdf_d5 IS '5 日累计涨跌幅 %（腾讯 rank 行）';
 COMMENT ON COLUMN market_daily.zdf_d20 IS '20 日累计涨跌幅 %（腾讯 rank 行）';
 COMMENT ON COLUMN market_daily.zdf_d60 IS '60 日累计涨跌幅 %（腾讯 rank 行）';
-INSERT INTO schema_migrations (name) VALUES ('0040_prediction_ledger_market_enrich.sql');
-COMMIT;
