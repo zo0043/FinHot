@@ -370,16 +370,19 @@ export function normalizeAnalysis(run: AnalysisRun) {
   const label = run.prefilter.label;
   const titleZh = collapseWhitespace(run.writing?.titleZh ?? "");
   const summaryZh = (run.writing?.summaryZh ?? "").trim();
-  // Past the prefilter (PASS or UNKNOWN) an item is relevant, but without a usable Chinese title and
-  // summary it cannot be published: it waits.
-  const relevance = label === "BLOCK" ? "block" : run.writing && (!titleZh || !summaryZh) ? "unknown" : "pass";
+  // Prefilter three states (plan §T0.1): BLOCK → block; PASS → pass; UNKNOWN (timeout/unparseable/
+  // missing body) is processed like PASS (judgment + ledger + direction all run) but recorded as
+  // "unknown" so the UI can show 「过了但需关注」(plan G0 观察点).
+  const relevance = label === "BLOCK" ? "block" : label === "UNKNOWN" ? "unknown" : "pass";
+  // Without a usable Chinese title and summary the item cannot be published: it waits (selected=false).
+  const publishable = Boolean(titleZh && summaryZh);
   // Selected when the two scores add up to twice the tier threshold; the mean, floored,
   // is the score shown (it never decides a half point on its own).
   const values = run.scores && !run.scores.refused ? run.scores.values : null;
   const sum = values?.length === SCORE_CALLS ? values.reduce((total, v) => total + v, 0) : null;
   const score = sum === null ? null : Math.floor(sum / SCORE_CALLS);
   const threshold = run.scores?.threshold ?? null;
-  const selected = relevance === "pass" && sum !== null && threshold !== null && sum >= threshold * SCORE_CALLS;
+  const selected = relevance !== "block" && publishable && sum !== null && threshold !== null && sum >= threshold * SCORE_CALLS;
   const subjects = run.structure?.subjects ?? [];
   const tags = [...(run.writing?.tags ?? run.structure?.tags ?? [])];
   for (const s of subjects) {

@@ -48,7 +48,7 @@ test("one model runs the prefilter, both scores, the writing and the structure",
   const res = await analyzeArticle(articleId);
   assert.equal(res!.output!.selected, true);
   assert.equal(res!.output!.titleZh, "一个行情的标题");
-  assert.equal(seen.length, 5, "prefilter, two scores, understand, structure");
+  assert.equal(seen.length, 6, "prefilter, two scores, understand, structure, direction（T0.4 方向全量化）");
   assert.ok(seen.every((r) => r.model === "one-model"), "every request names the configured model");
   const services = await sql<{ service: string }[]>`SELECT DISTINCT service FROM receipts WHERE subject LIKE ${`article:${articleId}%`}`;
   assert.deepEqual(services.map((s) => s.service), ["llm"]);

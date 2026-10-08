@@ -112,8 +112,8 @@ test("a selected item: prefilter, two scores, the content understanding, the str
   const r = await row(id);
   assert.deepEqual([r.title_zh, r.reason_zh, r.category], ["理解标题 CLEAR", "理由 CLEAR", "market"]);
   // One write pass per historical revision: at least one of every step's purpose must be among the receipts.
-  const purposes = (await sql<{ purpose: string }[]>`SELECT DISTINCT purpose FROM receipts WHERE id IN (${r.receipt_ids})`).map((q) => q.purpose);
-  for (const purpose of ["prefilter/attention", "score/attention", "editorial/understand", "editorial/structure", "direction/subject"])
+  const purposes = (await sql<{ purpose: string }[]>`SELECT DISTINCT purpose FROM receipts WHERE id = ANY(${r.receipt_ids})`).map((q) => q.purpose);
+  for (const purpose of ["prefilter_article", "score_article", "understand_article", "structure_article", "direction_article"])
     assert.ok(purposes.includes(purpose), `a ${purpose} receipt is committed`);
   assert.ok(r.receipt_ids.length >= 6);
   assert.deepEqual(r.tags, ["行情/异动", "政策/监管", "贵州茅台"], "vocabulary tags (synonyms mapped, unknown dropped) and the subject's tag");
@@ -222,7 +222,7 @@ test("the prediction ledger records every scored article: selected and counterfa
   await analyzeArticle(midId);
   const rows = await sql<{ article_id: string; direction: string; direction_status: string; published: boolean; prompt_version: string; model: string; t0: Date | null; snapshot: Record<string, unknown>; horizon: string | null; confidence: number | null }[]>`
     SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot, horizon, confidence
-    FROM prediction_ledger WHERE article_id IN (${[selId, midId]})`;
+    FROM prediction_ledger WHERE article_id = ANY(${[selId, midId]})`;
   assert.equal(rows.length, 2, "one row per scored article");
   const sel = rows.find((r) => r.article_id === selId)!;
   const mid = rows.find((r) => r.article_id === midId)!;

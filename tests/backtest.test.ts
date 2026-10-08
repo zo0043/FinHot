@@ -6,8 +6,8 @@
 //   baseline（§5.2）：同窗口（X ≤ asOf）板块惯性概率 P[sign(close(X+N)/close(X-1)-1) == sign(close(X)/close(X-1)-1)]，
 //   X 收益恰 0 跳过；n<30 → insufficient；OOT = t0_date > asOf - ootDays 自然天（单列，不进 in-sample 结论）。
 // A7：回测基于台账（入选+反事实都计数）；反事实条目的用户面暴露不在本文件（见 publication/bark 测试）。
-// 纯函数 fixture：收盘价手工构造，期望值在注释里。DB fixture 复用 labeler.test.ts 模式
-//   （随机 2027+ 年月避免跨 lane 撞键；labeler 先标注，再断言 backtest 与 labeler 存储的 cum_pct_tN 一致）。
+// 纯函数 fixture：收盘价手工构造，期望值在注释里。DB fixture 参考 labeler.test.ts 模式
+//   （2031+ 随机年月——labeler 用 2027-2029，本夹具用 2031-2032，避免全量 suite 里两文件随机年月撞键污染 market_daily）。
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { execFile } from "node:child_process";
@@ -287,12 +287,12 @@ test("纯函数：空台账行 → markdown 样本不足声明", () => {
   assert.match(res.markdown, /样本不足/);
 });
 
-// ---- 真实 DB fixture（labeler.test.ts 同款：随机 2027+ 年月）----
+// ---- 真实 DB fixture（labeler.test.ts 同款模式：2031+ 随机年月）----
 // 夹具 7 个交易日：D0=MM-02（T0m1），MM-03..10 假期空档，T0=MM-11= D1，D2..D6=MM-12..16。
 // 两行台账（同 t0 同板块不同方向）：bullish + bearish [semicap]，labeler 标注后
 //   t1/t3/t5 = 100/100-1=0 / 104/100-1=4 / 108/100-1=8（%）。
 const run = Math.random().toString(16).slice(2, 8);
-const Y = 2027 + Math.floor(Math.random() * 3);
+const Y = 2031 + Math.floor(Math.random() * 2);
 const MM = String(1 + Math.floor(Math.random() * 12)).padStart(2, "0");
 const D = (day: number) => `${Y}-${MM}-${String(day).padStart(2, "0")}`;
 const D0 = D(2);
