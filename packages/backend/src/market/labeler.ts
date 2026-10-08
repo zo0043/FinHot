@@ -1,8 +1,9 @@
 // prediction_ledger 的 T+N 结果标注（outcome_status / t0_date / cum_pct_tN / hit_tN / baseline_ref）。
 // 防泄漏契约（回测基率的唯一口径）：
 //   D(t0) = t0 时刻的北京日历日；T0 = 严格晚于 D(t0) 的第一个 market_daily 交易日（有行的日期即交易日）；
-//   T0m1 = T0 前一个交易日；T+N = 严格晚于 T0 的第 N 个交易日（N∈{1,3,5}）。
-//   cum(N) = close(T0+N)/close(T0m1) - 1（与 market_daily.pct 同 % 单位）。
+//   T0m1 = T0 前一个交易日；T+N = T0m1 之后第 N 个交易日（N∈{1,3,5}），即 T+1 = T0 本身（事件收益含 T0 当日反应；
+//   事件研究惯例：公告日次一交易日开始度量；例 t0=09-30 → T0=10-09，T+1=10-09 收盘，T+5=10-15 收盘，方案 §5.1）。
+//   cum(N) = close(T+N)/close(T0m1) - 1（与 market_daily.pct 同 % 单位）。
 //   板块自有序列在所需日期缺行 → 回退该板块 benchIndex（industry/sectors.ts），baseline_ref 记录实际所用序列。
 //   headline 取 scope 各板块 cum(N) 的等权均值。
 // 幂等：只取 outcome_status='pending'、按 id 更新（且仅当仍 pending）；部分就绪（T+5 尚未到来）的
@@ -111,9 +112,9 @@ export async function labelOutcomes(): Promise<LabelOutcomesResult> {
       continue;
     }
 
-    // T+N = 严格晚于 T0 的第 N 个交易日（可能尚未到来）
+    // T+N = T0m1 之后第 N 个交易日，即 T+1 = T0 本身（可能尚未到来）
     const horizonDay = new Map<number, string | null>();
-    for (const n of HORIZONS) horizonDay.set(n, t0Idx + n < days.length ? days[t0Idx + n] : null);
+    for (const n of HORIZONS) horizonDay.set(n, t0Idx + n - 1 < days.length ? days[t0Idx + n - 1] : null);
     const horizonDates = HORIZONS.map((n) => horizonDay.get(n)!).filter((v): v is string => v !== null);
 
     // 每板块定序列：自有序列在所需日期齐全则用自有，否则回退 benchIndex（baseline_ref 记录）
