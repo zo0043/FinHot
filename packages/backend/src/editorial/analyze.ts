@@ -431,7 +431,7 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   // 事件方向步：对所有已打分事件跑（入选 + 反事实，M1 全量口径，见 .agents/plans/FinHot-推演飞轮升级方案.md T0.4）。
   // 失败不拖垮主流程——文章照常入库，台账记 failed。
   const direction = out.score !== null
-    ? await judgeDirection({ title: out.titleZh, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
+    ? await judgeDirection({ title: out.titleZh || input.title, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
         (d) => ({ direction: d.direction, scope: d.scope, note: d.note, horizon: d.horizon, confidence: d.confidence, model: d.model, receiptId: d.receiptId, reused: d.reused }),
         (error: unknown) => {
           console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，台账记 failed）", articleId, error: String(error) }));

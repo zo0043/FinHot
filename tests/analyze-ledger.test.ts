@@ -74,6 +74,12 @@ before(async () => {
 after(async () => {
   await provider.close();
   await stopBoss();
+  // 清掉本文件写入的台账行（三个源都要：主源 + X 源 + T2 源）：否则全量套跑时 labeler 的全局
+  // labelOutcomes() 会捞到这些 pending 行，把它的精确计数断言带偏。
+  await sql`DELETE FROM prediction_ledger WHERE article_id IN (SELECT id FROM articles WHERE source_id = ANY(${[SOURCE, X_SOURCE, T2_SOURCE]}::text[]))`;
+  await sql`DELETE FROM analyses WHERE article_id IN (SELECT id FROM articles WHERE source_id = ANY(${[SOURCE, X_SOURCE, T2_SOURCE]}::text[]))`;
+  await sql`DELETE FROM articles WHERE source_id = ANY(${[SOURCE, X_SOURCE, T2_SOURCE]}::text[])`;
+  await sql`DELETE FROM sources WHERE id = ANY(${[SOURCE, X_SOURCE, T2_SOURCE]}::text[])`;
   await closeDb();
 });
 
@@ -221,7 +227,7 @@ test("the prediction ledger records every scored article: selected and counterfa
   await analyzeArticle(selId);
   await analyzeArticle(midId);
   const rows = await sql<{ article_id: string; direction: string; direction_status: string; published: boolean; prompt_version: string; model: string; t0: Date | null; snapshot: Record<string, unknown>; horizon: string | null; confidence: number | null }[]>`
-    SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot, horizon, confidence
+    SELECT article_id, direction, direction_status, published, prompt_version, model, t0, input_snapshot AS snapshot, horizon, confidence
     FROM prediction_ledger WHERE article_id = ANY(${[selId, midId]})`;
   assert.equal(rows.length, 2, "one row per scored article");
   const sel = rows.find((r) => r.article_id === selId)!;

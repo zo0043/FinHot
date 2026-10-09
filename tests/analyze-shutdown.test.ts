@@ -91,7 +91,14 @@ before(async () => {
 after(async () => {
   active?.scoreAnswer.open(); active?.structureAnswer.open(); active?.writingAnswer?.open();
   for (const child of children) child.kill("SIGTERM");
-  await provider.close(); await stopBoss(); await closeDb();
+  await provider.close(); await stopBoss();
+  // 清掉本文件写入的台账行：否则全量套跑时 labeler 的全局 labelOutcomes() 会捞到这些 pending 行，
+  // 把它的精确计数断言带偏。
+  await sql`DELETE FROM prediction_ledger WHERE article_id IN (SELECT id FROM articles WHERE source_id = ${SOURCE})`;
+  await sql`DELETE FROM analyses WHERE article_id IN (SELECT id FROM articles WHERE source_id = ${SOURCE})`;
+  await sql`DELETE FROM articles WHERE source_id = ${SOURCE}`;
+  await sql`DELETE FROM sources WHERE id = ${SOURCE}`;
+  await closeDb();
 });
 
 test("SIGTERM during the final paid writing call still commits the complete analysis and publication", async () => {

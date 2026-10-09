@@ -24,6 +24,7 @@ const provider = await stub((_hit, req) => {
     : system.includes("事件注意力评分器") ? { attentionScore: 80 }
     : system.includes("内容理解编辑") ? { itemType: "market_shift", authorRole: "principal", tags: ["行情/异动"], editorialJudgment: "理由", titleZh: "一个行情的标题", summaryZh: "一篇写行情的摘要。第二句。" }
     : system.includes("资料结构化助手") ? { category: "market", tags: ["行情/异动"], subjects: [], fact: null }
+    : system.includes("事件方向判断器") ? { direction: "bullish", scope: [], note: "测试", primary_horizon: "t3", confidence: 72 }
     : user.includes("title_zh") ? "title_zh: 标题\nsummary_zh: 摘要。"
     : null;
   if (content === null) throw new Error("unexpected request");
@@ -37,6 +38,12 @@ before(async () => {
 after(async () => {
   await provider.close();
   await stopBoss();
+  // 清掉本文件写入的台账行：否则全量套跑时 labeler 的全局 labelOutcomes() 会捞到这些 pending 行，
+  // 把它的精确计数断言带偏。
+  await sql`DELETE FROM prediction_ledger WHERE article_id IN (SELECT id FROM articles WHERE source_id = ${SOURCE})`;
+  await sql`DELETE FROM analyses WHERE article_id IN (SELECT id FROM articles WHERE source_id = ${SOURCE})`;
+  await sql`DELETE FROM articles WHERE source_id = ${SOURCE}`;
+  await sql`DELETE FROM sources WHERE id = ${SOURCE}`;
   await closeDb();
 });
 
