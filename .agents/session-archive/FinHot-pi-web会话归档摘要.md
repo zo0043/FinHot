@@ -40,7 +40,7 @@
 | 10-09 | 01a11ea0 | 进度检查④：G0 提前达成、修 4 回归、11:57 补部署 | 中断（18:00 幽灵事故） |
 | 10-09 | 01a1205d | 进度检查⑤：T0.5 69%、缺数据定性、方案重建入库 756126c | 完成 |
 
-**未归档（25，非 FinHot）**：LiteLLM/lllm（10）：01a0b98e 01a0bc11 01a0bcbf 01a0bce5 01a0bd6b 01a0bde1 01a0c1bb 01a0c3c5 01a0c3d3 01a0c800；VPS 内存分析（4）：01a0bcc1 01a0bdc6 01a0c7d8 01a0c865；dsh/web/杂项（4）：01a0bcaf 01a0bdb9 01a0d180 01a0c3c1；pi 工具链（6）：01a0cc42（v0.9.2）01a11416（v0.10.0）01a11e8d（v0.11.0）01a11b28（截断问）01a0eafa（magic-context 安装）01a0fcab（agent-harness）；其他项目（1）：01a0ce1d（liyuan）。另有本归档会话 01a120da（运行中未归档，结束后可在 pi-web 手动归档）。
+**未归档（25，非 FinHot）**：LiteLLM/lllm（10）：01a0b98e 01a0bc11 01a0bcbf 01a0bce5 01a0bd6b 01a0bde1 01a0c1bb 01a0c3c5 01a0c3d3 01a0c800；VPS 内存分析（4）：01a0bcc1 01a0bdc6 01a0c7d8 01a0c865；dsh/web/杂项（4）：01a0bcaf 01a0bdb9 01a0d180 01a0c3c1；pi 工具链（6）：01a0cc42（v0.9.2）01a11416（v0.10.0）01a11e8d（v0.11.0）01a11b28（截断问）01a0eafa（magic-context 安装）01a0fcab（agent-harness）；其他项目（1）：01a0ce1d（liyuan）。另有本归档会话 01a120da（运行中未归档，结束后可在 pi-web 手动归档）。**这 25 个与 22 个 FinHot 会话已于 10-10 全部删除（备份见 §4）。**
 **边界判定**：01a0f0e8 表面是 pi-web 通用问题，但起因与排查对象均为 FinHot 起源会话 → 纳入归档；01a11b28、01a11e8d 仅顺带提及 FinHot（系统提示/记忆）→ 未归档。
 
 ## 2. 分阶段会话摘要
@@ -304,6 +304,7 @@
 
 - **已归档 22 个会话**：通过 pi-web 自身 API（`POST /api/sessions/ui-state`，`{"action":"set","ids":[...],"archived":true}`）写入 `~/.pi/agent/pi-web-session-state.json`（22 条 `archivedAt`）。注：10-09 归档时 01a0f0e8 的完整 UUID 抄错（写成幽灵 key），实际 ID 为 `01a0f0e8-2a4f-72c4-806b-e899e15973ef`，10-10 已修正并中和幽灵 key。
 - **原件已删除（2026-10-10）**：22 个会话 JSONL 已从 `~/.pi/agent/sessions/--home-ubuntu-app--/` 删除（46→24）。**唯一备份 = `~/.pi/agent/backups/pi-web-archived-finhot-2026-10-10.tar.gz`**（11MB，22 个文件，sha256 见同名 .sha256 文件，删除前逐文件核对 + 抽查字节一致）。恢复方法：解压回原目录，pi-web 侧边栏自动重新列出（归档状态仍保留）；单会话恢复后如需取消归档，走「已归档」视图或 API `{"action":"restore","entries":[{"id":"<session-id>","pinnedAt":null,"archivedAt":null}]}`。
+- **全部历史清空（2026-10-10）**：25 个非 FinHot 会话也全部删除，48 个会话中仅存当前会话 01a120da。非 FinHot 22 个的备份 = `~/.pi/agent/backups/pi-web-remaining-history-2026-10-10.tar.gz`（3.8MB，sha256 同名 .sha256）；另有 3 个（01a0d180/01a0eafa/01a11416）在批量删除前已被用户手动删除，无备份。pi-web 验证：列表接口 200，仅列 1 个会话。索引/状态文件中的陈旧条目无害（文件缺失自动跳过）。
 - **未归档边界**：01a11b28（pi 截断问，4 处顺带提及）、01a11e8d（pi-web v0.11.0 升级，2 处顺带提及）未归档；01a0f0e8（截断横幅排查，起因与对象均为 FinHot 起源会话）已归档。
 - **本归档会话**（01a120da）运行时不能自我归档，结束后可在 pi-web 手动归档。
 - **本文件已提交 FinHot 仓库**（教训 #36：文档不入库会丢——推演飞轮方案文件曾两次丢失）。
