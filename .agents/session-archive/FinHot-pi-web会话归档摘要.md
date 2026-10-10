@@ -302,8 +302,8 @@
 
 ## 4. 归档操作说明
 
-- **已归档 22 个会话**：通过 pi-web 自身 API（`POST /api/sessions/ui-state`，`{"action":"set","ids":[...],"archived":true}`）写入 `~/.pi/agent/pi-web-session-state.json`（22 条 `archivedAt`，最终 revision 3）。会话文件本体仍在 `~/.pi/agent/sessions/--home-ubuntu-app--/`，未移动未删除。
-- **恢复方法**：pi-web 侧边栏「已归档」视图点恢复；或 API `{"action":"restore","entries":[{"id":"<session-id>","pinnedAt":null,"archivedAt":null}]}`。
+- **已归档 22 个会话**：通过 pi-web 自身 API（`POST /api/sessions/ui-state`，`{"action":"set","ids":[...],"archived":true}`）写入 `~/.pi/agent/pi-web-session-state.json`（22 条 `archivedAt`）。注：10-09 归档时 01a0f0e8 的完整 UUID 抄错（写成幽灵 key），实际 ID 为 `01a0f0e8-2a4f-72c4-806b-e899e15973ef`，10-10 已修正并中和幽灵 key。
+- **原件已删除（2026-10-10）**：22 个会话 JSONL 已从 `~/.pi/agent/sessions/--home-ubuntu-app--/` 删除（46→24）。**唯一备份 = `~/.pi/agent/backups/pi-web-archived-finhot-2026-10-10.tar.gz`**（11MB，22 个文件，sha256 见同名 .sha256 文件，删除前逐文件核对 + 抽查字节一致）。恢复方法：解压回原目录，pi-web 侧边栏自动重新列出（归档状态仍保留）；单会话恢复后如需取消归档，走「已归档」视图或 API `{"action":"restore","entries":[{"id":"<session-id>","pinnedAt":null,"archivedAt":null}]}`。
 - **未归档边界**：01a11b28（pi 截断问，4 处顺带提及）、01a11e8d（pi-web v0.11.0 升级，2 处顺带提及）未归档；01a0f0e8（截断横幅排查，起因与对象均为 FinHot 起源会话）已归档。
 - **本归档会话**（01a120da）运行时不能自我归档，结束后可在 pi-web 手动归档。
 - **本文件已提交 FinHot 仓库**（教训 #36：文档不入库会丢——推演飞轮方案文件曾两次丢失）。
