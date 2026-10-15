@@ -8,13 +8,14 @@
  * 没归上类的资料在日报里放进第一个 key 为 industry 的类别所在的节（没有就放最后一节）。
  */
 export const CATEGORIES = [
-  { key: "market", label: "盘面", section: "盘面动态", guide: "主要市场整体行情：指数涨跌、成交与资金流向、板块涨跌轮动、涨跌停与大幅异动" },
-  { key: "macro", label: "宏观", section: "宏观政策", guide: "中国宏观政策与监管取向：货币与财政操作、部门重要政策、新规与重要会议定调" },
-  { key: "a-share", label: "A股", section: "A股公司", guide: "上市公司事件：定期报告与业绩预告、重大公告、停复牌、回购增减持、股权激励、立案调查与处罚" },
-  { key: "global", label: "全球", section: "环球市场", guide: "海外与全球因素：海外央行、外围股指、关税贸易与地缘冲突、汇率与大宗商品变化" },
+  { key: "policy", label: "政策", section: "政策中心", guide: "国家与政府政策：国务院/部委的政策发布、官方解读、配套细则、试点与执行落地，按生命周期阶段归入" },
   { key: "industry", label: "行业", section: "行业动态", guide: "产业与板块基本面：景气、供需与产品价格、产能与技术路线、行业性政策细则；同时兜底归不上其他类别的财经消息" },
+  { key: "market", label: "盘面", section: "盘面", guide: "主要市场整体行情：指数涨跌、成交与资金流向、板块涨跌轮动、涨跌停与大幅异动" },
+  { key: "macro", label: "宏观数据", section: "宏观数据", guide: "官方统计数据发布与宏观趋势：CPI/PPI/PMI/社融/GDP/进出口/就业等数据及其解读" },
+  { key: "a-share", label: "公司", section: "公司动态", guide: "上市公司事件：定期报告与业绩预告、重大公告、停复牌、回购增减持、股权激励、立案调查与处罚" },
+  { key: "global", label: "环球", section: "环球", guide: "海外与全球因素：海外央行、外围股指、关税贸易与地缘冲突、汇率与大宗商品变化" },
   { key: "people", label: "人物", section: "人物观点", guide: "重点人物的公开信号：官员、企业家、投资人与经济学家的讲话、访谈、署名文章与公开市场行为" },
-  { key: "research", label: "数据", section: "数据研究", guide: "统计与数据发布及市场解读；券商研报、经济与行业研究、指数与排行发布" },
+  { key: "research", label: "数据研究", section: "数据研究", guide: "统计与数据发布及市场解读；券商研报、经济与行业研究、指数与排行发布" },
 ] as const;
 
 /**
@@ -35,7 +36,7 @@ export type CategoryKey = (typeof CATEGORIES)[number]["key"];
 
 /** 可选的主题标签。 */
 export const TOPIC_TAGS = [
-  "人工智能", "半导体", "新能源", "医药生物", "金融", "消费", "房地产", "汽车", "债券", "汇率", "黄金", "原油商品", "美联储", "关税贸易", "互联网",
+  "人工智能", "半导体", "新能源", "医药生物", "金融", "消费", "房地产", "汽车", "债券", "汇率", "黄金", "原油商品", "美联储", "关税贸易", "互联网", "货币政策", "财政政策", "产业政策",
 ] as const;
 
 /** 可选的实体标签（公司、机构、平台）。 */
@@ -84,7 +85,7 @@ export const CATEGORY_BY_ITEM_TYPE: Readonly<Record<string, string>> = {
  */
 export const CATEGORY_BY_TAG: Readonly<Record<CategoryTag, CategoryKey>> = {
   "行情/异动": "market",
-  "政策/监管": "macro",
+  "政策/监管": "policy",
   "公司公告": "a-share",
   "资本运作": "a-share",
   "数据发布": "research",

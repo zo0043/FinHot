@@ -518,6 +518,30 @@
       "related": ["pboc", "mof", "gov"]
     },
     {
+      "slug": "monetary-policy",
+      "name": "货币政策",
+      "group": "field",
+      "tags": ["货币政策"],
+      "definition": "央行货币政策动作与信号：降准降息、LPR 调整、公开市场投放与结构性工具，及其对 A 股板块的传导。",
+      "related": ["pboc", "macro-policy", "bonds"]
+    },
+    {
+      "slug": "fiscal-policy",
+      "name": "财政政策",
+      "group": "field",
+      "tags": ["财政政策"],
+      "definition": "财政政策动作与信号：专项债、减税降费、财政支出方向与落地节奏，及其影响板块。",
+      "related": ["mof", "macro-policy", "industry"]
+    },
+    {
+      "slug": "industrial-policy",
+      "name": "产业政策",
+      "group": "field",
+      "tags": ["产业政策"],
+      "definition": "部委产业政策与行业细则：产业规划、配套细则、试点与执行落地，及受影响的板块与产业链。",
+      "related": ["ndrc", "macro-policy", "policy"]
+    },
+    {
       "slug": "global-markets",
       "name": "全球市场",
       "group": "field",
