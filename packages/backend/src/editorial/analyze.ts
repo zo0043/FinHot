@@ -431,8 +431,8 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
   // 事件方向步：对所有已打分事件跑（入选 + 反事实，M1 全量口径，见 .agents/plans/FinHot-推演飞轮升级方案.md T0.4）。
   // 失败不拖垮主流程——文章照常入库，台账记 failed。
   const direction = out.score !== null
-    ? await judgeDirection({ title: out.titleZh || input.title, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
-        (d) => ({ direction: d.direction, scope: d.scope, note: d.note, horizon: d.horizon, confidence: d.confidence, model: d.model, receiptId: d.receiptId, reused: d.reused }),
+    ? await judgeDirection({ title: out.titleZh || input.title, summary: out.summaryZh, category: out.category, tags: out.tags, sourceName: input.source.name, itemType: run.writing?.itemType ?? null }, { attemptTag: opts.attemptTag, promptVersion: PROMPT_VERSIONS.directions, subject: subjectOf(input) }).then(
+        (d) => d ? ({ direction: d.direction, scope: d.scope, note: d.note, horizon: d.horizon, confidence: d.confidence, policy_stage: d.policy_stage, model: d.model, receiptId: d.receiptId, reused: d.reused }) : null,
         (error: unknown) => {
           console.log(JSON.stringify({ level: "warn", msg: "方向判断失败（文章照常入库，台账记 failed）", articleId, error: String(error) }));
           return null;
@@ -456,10 +456,10 @@ export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Pr
     const stale = !current || current.revision !== input.revision;
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO analyses (article_id, input_revision, origin, model, prompt_version, receipt_ids, relevance, category, tags,
-        subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, horizon, confidence, output)
+        subjects, title_zh, summary_zh, reason_zh, score, selected, direction, scope, horizon, confidence, policy_stage, output)
       VALUES (${articleId}, ${input.revision}, 'model', ${w?.model ?? run.prefilter.model}, ${ANALYZE_PROMPT_VERSION}, ${receiptIds},
         ${out.relevance}, ${out.category}, ${out.tags}, ${out.subjects}, ${out.titleZh}, ${out.summaryZh}, ${out.reasonZh},
-        ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${direction?.horizon ?? null}, ${direction?.confidence ?? null}, ${tx.json(detail as never)})
+        ${out.score}, ${out.selected}, ${direction?.direction ?? null}, ${direction?.scope ?? []}, ${direction?.horizon ?? null}, ${direction?.confidence ?? null}, ${direction?.policy_stage ?? null}, ${tx.json(detail as never)})
       RETURNING id`;
     for (const id of receiptIds) await completeReceipt(tx, id);
     if (out.score !== null) {

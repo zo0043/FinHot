@@ -5,7 +5,7 @@ import { sql } from "../db.ts";
 import { proxyBodyImages } from "../media/imgproxy.ts";
 import { textToHtml } from "../content/sanitize.ts";
 import { ITEM_COLUMNS, ITEM_FROM, selectedCondition, toItemSummary, xView, type ItemRow } from "./items.ts";
-import { publicDirection } from "../editorial/direction.ts";
+import { publicDirection, publicPolicyStage } from "../editorial/direction.ts";
 import { itemUrl } from "./links.ts";
 import { hasItemPage } from "./rules.ts";
 import { SITE } from "@aihot/industry/site";
@@ -57,6 +57,8 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
   // A7: only selected items carry direction on the user surface; none/null is not sent.
   const direction = row.selected ? publicDirection(row.direction) : null;
   const scope = direction ? row.scope : [];
+  // 政策阶段徽章与方向同一纪律：只有入选条目才带，非受控词表值归 null。
+  const policy_stage = row.selected ? publicPolicyStage(row.policy_stage) : null;
   if (row.visibility === "summary-only") {
     const detail: ItemDetail = {
       ...summary,
@@ -74,6 +76,7 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
       group: null,
       direction,
       scope,
+      policy_stage,
     };
     return { kind: "found", detail, row };
   }
@@ -144,6 +147,7 @@ export async function loadItemDetail(id: string, now = new Date()): Promise<Deta
     group,
     direction,
     scope,
+    policy_stage,
   };
   return { kind: "found", detail, row };
 }

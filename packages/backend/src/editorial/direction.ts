@@ -2,9 +2,10 @@
 // 判断的是事件性质（利好谁/利空谁），不是指数预测——回测（scripts/backtest.ts）用它 × market_daily
 // 算命中率。方向失败不拖垮主流程：告警进日志，文章照常入库（没有方向数据的文章透出时不显示方向）。
 import { z } from "zod";
+import type { PolicyStage } from "@aihot/contracts/site";
 import { SECTOR_ALIAS_GUIDE, SECTOR_BY_KEY } from "@aihot/industry/sectors";
 import { sql } from "../db.ts";
-import { chatJson } from "../providers/llm.ts";
+import { chatJson, ModelOutputError } from "../providers/llm.ts";
 import { promptText } from "./prompts.ts";
 import { modelFor } from "./models.ts";
 
@@ -19,6 +20,8 @@ export interface DirectionResult {
   horizon: DirectionHorizon | null;
   /** v2（0041）：0-100 整数置信度；缺失/非法 → null。验收是 ≥95% 新预测有值，不是 100%，所以容错不拒绝。 */
   confidence: number | null;
+  /** W3（0042）：政策生命周期阶段；仅 policy_regulation 事件有值，非政策事件强制 null；缺失/非法 → null（拿不准不猜）。 */
+  policy_stage: PolicyStage | null;
   model: string;
   receiptId: number;
   reused: boolean;
@@ -39,6 +42,8 @@ export const DirectionSchema = z.object({
     (v) => (v == null || v === "" ? null : v),
     z.coerce.number().int().min(0).max(100).nullish().catch(null).default(null),
   ),
+  // W3（0042）：policy_stage 受控词表；缺失/显式 null/非法（中文值、大小写、词表外）→ null，不 reject（拿不准不猜，不拖整条预测）。
+  policy_stage: z.enum(["draft", "release", "interpretation", "details", "pilot", "execution"]).nullish().catch(null).default(null),
   // 只用于输出质量（为什么选这个窗口），不落库。
   horizon_reason: z.string().max(100).catch(""),
 });
@@ -49,6 +54,8 @@ export interface DirectionInput {
   category?: string | null;
   tags?: readonly string[];
   sourceName?: string;
+  /** 结构步判定的事件类型：policy_stage 仅 policy_regulation 事件透出，其余恒 null。 */
+  itemType?: string | null;
 }
 
 /** 只保留受控词表里的 key（模型爱自由发挥，这一层挡回去），最多 3 个、保序去重。 */
@@ -77,28 +84,56 @@ export function directionDisplay(direction: string | null | undefined, scope: re
   return names.length > 0 ? `${DIRECTION_USER_LABELS[dir]} · 板块：${names.join("、")}` : DIRECTION_USER_LABELS[dir];
 }
 
+/** 用户面政策阶段闸门（与 publicDirection 同纪律）：只透受控词表内的值，其余（含旧数据）归 null（不展示阶段徽章）。 */
+export function publicPolicyStage(stage: string | null | undefined): PolicyStage | null {
+  return stage === "draft" || stage === "release" || stage === "interpretation" || stage === "details" || stage === "pilot" || stage === "execution" ? stage : null;
+}
+
 /** 只读 SQL 预填 scope（P5 历史相似检索也会用）：按板块 key 找日频数据。 */
 export async function directionForArticle(articleId: string): Promise<{ direction: DirectionLabel | null; scope: string[] } | null> {
   const [row] = await sql<{ direction: DirectionLabel | null; scope: string[] | null }[]>`SELECT direction, scope FROM analyses WHERE article_id = ${articleId} ORDER BY id DESC LIMIT 1`;
   return row ? { direction: row.direction, scope: row.scope ?? [] } : null;
 }
 
-export async function judgeDirection(input: DirectionInput, opts: { attemptTag?: string; timeoutMs?: number; promptVersion: string; subject?: string }): Promise<DirectionResult> {
+export async function judgeDirection(input: DirectionInput, opts: { attemptTag?: string; timeoutMs?: number; promptVersion: string; subject?: string }): Promise<DirectionResult | null> {
   const model = await modelFor("direction");
   const version = opts.promptVersion;
   const system = promptText("directions", { sectorGuide: SECTOR_ALIAS_GUIDE });
-  const res = await chatJson({
+  const user = JSON.stringify({ title: input.title, summary: input.summary.slice(0, 400), category: input.category ?? null, tags: input.tags ?? [], source: input.sourceName ?? null });
+  const subject = opts.subject ?? "direction:adhoc";
+  const call = (attemptTag: string | undefined) => chatJson({
     model,
     purpose: "direction_article",
-    subject: opts.subject ?? "direction:adhoc",
+    subject,
     promptVersion: version,
     system,
-    user: JSON.stringify({ title: input.title, summary: input.summary.slice(0, 400), category: input.category ?? null, tags: input.tags ?? [], source: input.sourceName ?? null }),
+    user,
     schema: DirectionSchema,
     temperature: 0,
     maxTokens: 300,
     timeoutMs: opts.timeoutMs ?? 30_000,
-    attemptTag: opts.attemptTag,
+    attemptTag,
   });
-  return { direction: res.data.direction, scope: sanitizeScope(res.data.scope), note: res.data.note.trim(), horizon: res.data.primary_horizon, confidence: res.data.confidence, model: res.model, receiptId: res.receiptId, reused: res.reused };
+  let res: Awaited<ReturnType<typeof call>>;
+  try {
+    res = await call(opts.attemptTag);
+  } catch (error) {
+    // T4.3（W3）单次重试：解析失败（非法 JSON / 契约不可用，ModelOutputError；回执已被标记 failed）
+    // → 换 attemptTag 后缀 -r2 重调一次（新 logical key，回执为新调用）；其他错误（预算/DB/网关）不在此重试。
+    if (!(error instanceof ModelOutputError)) throw error;
+    console.log(JSON.stringify({ level: "warn", msg: "direction 首次输出不可用，单次重试（attemptTag -r2）", subject, error: String(error).slice(0, 300) }));
+    try {
+      res = await call(opts.attemptTag ? `${opts.attemptTag}-r2` : "r2");
+    } catch (retryError) {
+      if (retryError instanceof ModelOutputError) {
+        // 仍失败：结果保持 null 并记日志（失败不拖垮主流程，文章照常入库）。
+        console.log(JSON.stringify({ level: "warn", msg: "direction 重试后输出仍不可用，结果保持 null", subject, error: String(retryError).slice(0, 300) }));
+        return null;
+      }
+      throw retryError;
+    }
+  }
+  // 非 policy_regulation 事件强制 null（阶段只对政策/监管动作有意义，即使模型给了值）。
+  const policy_stage = input.itemType === "policy_regulation" ? res.data.policy_stage : null;
+  return { direction: res.data.direction, scope: sanitizeScope(res.data.scope), note: res.data.note.trim(), horizon: res.data.primary_horizon, confidence: res.data.confidence, policy_stage, model: res.model, receiptId: res.receiptId, reused: res.reused };
 }

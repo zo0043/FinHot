@@ -135,6 +135,9 @@ export interface OutlineEntry {
   level: number;
 }
 
+/** 政策生命周期阶段（W3 政策化，0042）：draft 征求意见/草案 · release 正式发布 · interpretation 官方解读 · details 配套细则 · pilot 试点 · execution 生效执行。 */
+export type PolicyStage = "draft" | "release" | "interpretation" | "details" | "pilot" | "execution";
+
 export interface ItemDetail extends ItemSummary {
   readingMode: "full" | "summary-only";
   author: string | null;
@@ -143,6 +146,8 @@ export interface ItemDetail extends ItemSummary {
   direction: "bullish" | "bearish" | "neutral" | null;
   /** 方向影响的板块（受控词表 sector key）；direction 为 null 时为空数组。 */
   scope: string[];
+  /** 政策生命周期阶段（0042，direction 步同调用输出）：仅 policy/监管 事件有值；null = 非政策或拿不准，不渲染阶段徽章。与 direction 一致，只有入选条目才带。 */
+  policy_stage: PolicyStage | null;
   /** Chinese body (translation or Chinese original) and original body, whitelisted HTML. */
   body: { zh: string | null; original: string | null; zhKind: "translation" | "original" | null; complete: boolean } | null;
   outline: OutlineEntry[];

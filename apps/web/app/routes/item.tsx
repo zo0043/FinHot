@@ -8,7 +8,7 @@ import { loadOr404 } from "../lib/api.server";
 import { breadcrumbLd, pageMeta, siteUrl, titled } from "../lib/seo";
 import { fullDateTime, relativeTime } from "../lib/format";
 import { markRead } from "../lib/local-state";
-import { SelectedBadge } from "../components/ui/Badge";
+import { Badge, SelectedBadge } from "../components/ui/Badge";
 import { ScoreLabel } from "../components/ui/Score";
 import { PillTabs } from "../components/ui/Tabs";
 import { ArticleLayout, RailSection } from "../components/ui/Page";
@@ -112,6 +112,20 @@ function DirectionLine({ direction, scope }: { direction: string | null; scope: 
   );
 }
 
+/** 政策生命周期阶段文案（与后端 PolicyStage（0042）保持一致）；与方向一致只有入选条目下发，null 不渲染阶段徽章。 */
+const POLICY_STAGE_LABELS: Record<string, string> = { draft: "草案", release: "发布", interpretation: "解读", details: "细则", pilot: "试点", execution: "执行" };
+
+/** 方向行旁的阶段徽章：「阶段 · 细则」；null 不渲染。样式复用现有徽章 class。 */
+function StageBadge({ stage }: { stage: string | null }) {
+  const label = stage ? POLICY_STAGE_LABELS[stage] : null;
+  if (!label) return null;
+  return (
+    <Badge tone="neutral" title="政策生命周期阶段">
+      阶段 · {label}
+    </Badge>
+  );
+}
+
 export default function ItemPage() {
   const { item } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
@@ -204,6 +218,7 @@ export default function ItemPage() {
       {item.selected && <SelectedBadge />}
       <ScoreLabel score={item.score} />
       {item.selected && <DirectionLine direction={item.direction} scope={item.scope} />}
+      {item.selected && <StageBadge stage={item.policy_stage} />}
     </div>
   );
 
@@ -318,8 +333,9 @@ export default function ItemPage() {
               </span>
             )}
             {item.selected && (
-              <span className="ml-1 lg:hidden">
+              <span className="ml-1 inline-flex items-center gap-1.5 lg:hidden">
                 <DirectionLine direction={item.direction} scope={item.scope} />
+                <StageBadge stage={item.policy_stage} />
               </span>
             )}
           </div>

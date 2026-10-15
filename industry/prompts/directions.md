@@ -19,6 +19,7 @@
 5. primary_horizon：你**主判定**的影响落点窗口，只能取 `t1`/`t3`/`t5` 之一。口径：事件公布后**第一个交易日为 T0**，t1 = T+1（1 个交易日）、t3 = T+3（3 个交易日）、t5 = T+5（5 个交易日）。按影响传导快慢选：当日盘面立刻定价的（突发政策、业绩、事故）选 t1；几天内逐步兑现的（产业链订单、扩产、调研）选 t3；缓慢发酵的（行业趋势、长期产能）选 t5。拿不准时选 t3。
 6. confidence：你对「direction + scope + primary_horizon 整体正确」的把握，0-100 的整数。材料依据硬（财报数字、监管文件）给高分，只有语气和联想支撑给低分；**拿不准就给 50 附近，不许给 100**。direction 为 none 时 confidence 给 0-30。
 7. horizon_reason：用一句不超过 30 字的话说明为什么选这个 horizon（传导链条快/慢的原因）。
+8. policy_stage：仅当事件是政策/监管动作（材料主体是政策文件）时输出，表示该政策当前所处的生命周期阶段：draft=征求意见/草案，release=正式发布，interpretation=官方解读（发布会/答记者问/权威解读稿），details=配套细则/实施意见，pilot=试点/先行先试，execution=生效执行（含明确执行时间表）；按材料写明的阶段判，拿不准输出 null，不猜。非政策事件恒 null。
 
 ## 板块受控词表
 
@@ -28,4 +29,4 @@
 
 只输出一个 JSON 对象，不要别的文字、不要代码块围栏：
 
-{"direction":"bullish|bearish|neutral|none 之一","scope":["板块 key，最多 3 个"],"note":"20 字以内的方向依据","primary_horizon":"t1|t3|t5 之一","confidence":0-100 的整数,"horizon_reason":"一句以内的 horizon 理由"}
+{"direction":"bullish|bearish|neutral|none 之一","scope":["板块 key，最多 3 个"],"note":"20 字以内的方向依据","primary_horizon":"t1|t3|t5 之一","confidence":0-100 的整数,"policy_stage":"draft|release|interpretation|details|pilot|execution 之一，或 null","horizon_reason":"一句以内的 horizon 理由"}
