@@ -15,7 +15,7 @@ test("itemType → 分类标签 → 类别 key", () => {
   for (const [itemType, categoryKey] of [
     ["company_filing", "a-share"],
     ["capital_deal", "a-share"],
-    ["policy_regulation", "macro"],
+    ["policy_regulation", "policy"],
     ["market_shift", "market"],
     ["data_release", "research"],
     ["opinion_view", "people"],
