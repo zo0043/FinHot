@@ -1,7 +1,6 @@
 # FinHot 推演飞轮升级方案（P0–P3 + M1–M4）
 
-> **状态**: **⏸ 已暂停（2026-10-11）**——用户判定「目前用处不大、消耗 token」，生产栈已 `docker compose stop`（api/worker/web/db 全停，数据卷 aihot_data 保留）。恢复 = `cd /home/ubuntu/app/FinHot && sudo docker compose up -d`，先核 worker image=sha256:ab34009e（10-09 18:25 从 main 5caa4ed 重建，D6 铁律）+ 确认 T0.5 回填完成/补跑失败行，再推进「待决事项」。
-> **状态（暂停前）**: approved / 执行中（2026-10-07 批准，Phase 0/1 已基本完成）
+> **状态**: **▶ 运行中（2026-10-15 23:00 恢复）**——政策化改造 P1 已合入 main（031e1bf，spec/plan 在 doc/specs、doc/plans 的 2026-10-15-policy-pivot）；生产栈已 `sudo docker compose up -d --build`，镜像 aihot-app=sha256:451d3f6a（自 main 031e1bf 重建，D6 铁律），0042 迁移已应用，14 个政策信源入库。**当前阻塞：gpt-load 代理 LLM_API_KEY 失效（"Invalid access key"，harness-demo/.env 同 key 也失效）→ LLM 调用（评分/direction/回填）全 400，待用户提供新 key 后：重启 worker、补跑 `scripts/backfill-policy-stage.ts`、进入 3 天观察（观察与 Task 6 gold 见 doc/plans/2026-10-15-policy-pivot.md）。**
 > **本文件**: 2026-10-09 21:00 整理的**状态版**（canonical，已提交仓库）。原始未标记版在 `/home/ubuntu/app/.agents/plans/2026-10-07T12-47-24-700Z-finhot.md`（仓库外，仅供对照）。原 `FinHot/.agents/plans/FinHot-推演飞轮升级方案.md` 副本曾被并行会话事故删除（仓库无 git 记录），2026-10-09 从原始版重建。
 > **目标一句话**: 把 FinHot 从「新闻注意力策展 + 可回测管线」升级为「信息 → 结构化预测 → 市场验证 → 蒸馏先验 → 参数再推导 → 回灌推演」的自改进飞轮，同时让「推演将来」可见可度量、「总结过去」可自动复盘。
 
