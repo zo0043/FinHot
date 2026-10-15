@@ -1,5 +1,5 @@
 {
-  "$comment": "FinHot 财经信源矩阵：合并自三份 spec（原 29 条 + group1 港股/A股公告/债券/期货 + group2 海外/制裁/行情/宏观补强/人物，X 与公众号按账号拆分后共 96 条）。合并规则：研报类 editorial；交易所公告源 pageSize=100 且 interval=15；公告类源不配 detail（PDF 直链 WAF，走摘要+跳转）；RSSHub feedUrl 一律占位域名 <自建RSSHub域名>；无 isolated；北向资金日净流入已废不建（建南向 002）。全部 enabled=false 起步。把握度标注在 name 中（[把握度:definite|likely|possible]，definite 不标），依赖标注：[待自建RSSHub]/[待X key]/[待MP key]/[待Jina]。",
+  "$comment": "FinHot 财经信源矩阵：合并自三份 spec（原 29 条 + group1 港股/A股公告/债券/期货 + group2 海外/制裁/行情/宏观补强/人物，X 与公众号按账号拆分后共 96 条）+ W1 政策化新增 14 条官方政策源（国务院政策文件库 JSON 检索 2 条 + 部委栏目 12 条，替换发改委/金融监管总局两处 RSSHub 占位），现共 108 条。合并规则：研报类 editorial；交易所公告源 pageSize=100 且 interval=15；公告类源不配 detail（PDF 直链 WAF，走摘要+跳转）；RSSHub feedUrl 一律占位域名 <自建RSSHub域名>；无 isolated；北向资金日净流入已废不建（建南向 002）。全部 enabled=false 起步。把握度标注在 name 中（[把握度:definite|likely|possible]，definite 不标），依赖标注：[待自建RSSHub]/[待X key]/[待MP key]/[待Jina]。",
   "sources": [
     {
       "id": "json-sse-announcement",
@@ -121,6 +121,388 @@
       "tags": [
         "A股",
         "监管"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "json-gov-zcwjk-gw",
+      "name": "国务院·国务院文件（政策文件库）",
+      "kind": "json_list",
+      "config": {
+        "url": "https://sousuo.www.gov.cn/search-gov/data?t=zhengcelibrary_gw&q=&searchfield=title%3Acontent%3Asummary&sort=timezd&sortType=1&p=1&n=20&timetype=timezd",
+        "headers": {
+          "Referer": "https://sousuo.www.gov.cn/"
+        },
+        "itemsPath": "searchVO.catMap.gongwen.listVO",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "publishedAtPath": "pubtime",
+        "publishedAtUnit": "epoch_ms",
+        "externalIdPath": "id",
+        "urlTemplate": "{url}",
+        "allowUrlPrefixes": [
+          "https://www.gov.cn/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "gov",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "json-gov-zcwjk-bm",
+      "name": "国务院·部委文件（政策文件库）",
+      "kind": "json_list",
+      "config": {
+        "url": "https://sousuo.www.gov.cn/search-gov/data?t=zhengcelibrary_bm&q=&searchfield=title%3Acontent%3Asummary&sort=timezd&sortType=1&p=1&n=20&timetype=timezd",
+        "headers": {
+          "Referer": "https://sousuo.www.gov.cn/"
+        },
+        "itemsPath": "searchVO.catMap.bumenfile.listVO",
+        "titlePaths": [
+          "title"
+        ],
+        "summaryPaths": [
+          "summary"
+        ],
+        "publishedAtPath": "pubtime",
+        "publishedAtUnit": "epoch_ms",
+        "externalIdPath": "id",
+        "urlTemplate": "{url}",
+        "allowUrlPrefixes": [
+          "https://www.gov.cn/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "gov",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-ndrc-xwdt",
+      "name": "国家发展改革委·新闻发布",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.ndrc.gov.cn/xwdt/",
+        "itemSelector": "ul.u-list > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}/\\d{1,2}/\\d{1,2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.ndrc.gov.cn/xwdt/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "ndrc",
+      "participation_mode": "editorial",
+      "interval_minutes": 15,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-most-fgzc",
+      "name": "科技部·法规政策",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.most.gov.cn/xxgk/xinxifenlei/fdzdgknr/fgzc/",
+        "itemSelector": "ul.list_common > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.most.gov.cn/xxgk/xinxifenlei/fdzdgknr/fgzc/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "most",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mwr-gfxwj",
+      "name": "水利部·规范性文件",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.mwr.gov.cn/zw/zcfg/gfxwj/",
+        "itemSelector": "ul.slnewsconlist > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.mwr.gov.cn/zwgk/gknr/",
+          "https://www.mwr.gov.cn/zw/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "mwr",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mwr-bmgz",
+      "name": "水利部·部门规章",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.mwr.gov.cn/zw/zcfg/bmgz/",
+        "itemSelector": "ul.slnewsconlist > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.mwr.gov.cn/zw/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "mwr",
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-moe-zcjd",
+      "name": "教育部·政策解读",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.moe.gov.cn/jyb_xwfb/s271/",
+        "itemSelector": "#list > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.moe.gov.cn/jyb_xwfb/s271/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "moe",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-sasac-zc",
+      "name": "国务院国资委·政策法规[把握度:likely]",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.sasac.gov.cn/n2588035/n2588320/index.html",
+        "itemSelector": "li:has(> a[href*=\"content.html\"][title])",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "detail": {
+          "maxFetches": 3,
+          "publishedAtSelector": "meta[name=\"publishdate\"]"
+        },
+        "allowUrlPrefixes": [
+          "https://www.sasac.gov.cn/n2588035/n2588320/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "sasac",
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mofcom-zcfb",
+      "name": "商务部·政策发布[把握度:likely]",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.mofcom.gov.cn/zwgk/zcjd/index.html",
+        "itemSelector": "section:has(h3:contains(政策发布)) ul.txtList_02 > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.mofcom.gov.cn/zcfb/",
+          "https://www.mofcom.gov.cn/gztz/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "mofcom",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-mot-zcjd",
+      "name": "交通运输部·政策解读",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.mot.gov.cn/gongkai/zcjd/index.html",
+        "itemSelector": "li.news-item",
+        "linkSelector": "a.news-link",
+        "titleSelector": "span.news-title",
+        "publishedAtSelector": "span.news-date",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.mot.gov.cn/gongkai/zcjd/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "mot",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-cac-zcfg",
+      "name": "国家网信办·政策法规[把握度:likely]",
+      "kind": "web_list",
+      "config": {
+        "url": "https://www.cac.gov.cn/",
+        "itemSelector": "#policy ul.news-normal > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "((\\d{4})[-/.]\\d{1,2}/\\d{1,2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.cac.gov.cn/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "cac",
+      "participation_mode": "editorial",
+      "interval_minutes": 120,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "web-forestry-lczc",
+      "name": "国家林草局·林草政策",
+      "kind": "web_list",
+      "config": {
+        "url": "http://www.forestry.gov.cn/main/5461/index.html",
+        "itemSelector": "div.news_list > ul > li",
+        "linkSelector": "a",
+        "titleSelector": "a",
+        "publishedAtRegex": "(\\d{4}-\\d{2}-\\d{2})",
+        "publishedAtUtcOffset": "+08:00",
+        "allowUrlPrefixes": [
+          "https://www.forestry.gov.cn/lyj/"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "forestry",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
@@ -901,31 +1283,6 @@
       "enabled": true
     },
     {
-      "id": "rss-ndrc-xwdt",
-      "name": "国家发展改革委·新闻发布[待自建RSSHub][把握度:likely]",
-      "kind": "rss",
-      "config": {
-        "feedUrl": "https://<自建RSSHub域名>/gov/ndrc/xwdt",
-        "summaryIsBody": false,
-        "_aihot": {
-          "initialBackfillLimit": 20
-        }
-      },
-      "tier": "T1",
-      "first_party": true,
-      "owner_entity_id": null,
-      "participation_mode": "editorial",
-      "interval_minutes": 60,
-      "tags": [
-        "宏观",
-        "官方",
-        "待自建RSSHub"
-      ],
-      "site_fulltext": false,
-      "syndicate_fulltext": false,
-      "enabled": false
-    },
-    {
       "id": "rss-mof-bond",
       "name": "财政部·政府债券管理[待自建RSSHub][把握度:possible]",
       "kind": "rss",
@@ -976,29 +1333,82 @@
       "enabled": false
     },
     {
-      "id": "rss-nfra-gongwen",
-      "name": "金融监管总局·公告[待自建RSSHub][把握度:possible]",
-      "kind": "rss",
+      "id": "json-nfra-zcfg",
+      "name": "金融监管总局·政策法规[把握度:likely]",
+      "kind": "json_list",
       "config": {
-        "feedUrl": "https://<自建RSSHub域名>/gov/nfra/gongwen",
-        "summaryIsBody": false,
+        "url": "https://www.nfra.gov.cn/cbircweb/DocInfo/SelectDocByItemUUIdsAndChild?itemUUIds=8401&pageSize=50&orderBy=builddate",
+        "headers": {
+          "Referer": "https://www.nfra.gov.cn/"
+        },
+        "itemsPath": "data",
+        "titlePaths": [
+          "docTitle"
+        ],
+        "summaryPaths": [
+          "docSubtitle",
+          "docSummary"
+        ],
+        "publishedAtPath": "publishDate",
+        "externalIdPath": "docId",
+        "urlTemplate": "https://www.nfra.gov.cn/cn/view/pages/ItemDetail.html?docId={docId}&itemId={itemId}",
+        "allowUrlPrefixes": [
+          "https://www.nfra.gov.cn/cn/view/pages/ItemDetail.html"
+        ],
         "_aihot": {
           "initialBackfillLimit": 20
         }
       },
       "tier": "T1",
       "first_party": true,
-      "owner_entity_id": null,
+      "owner_entity_id": "nfab",
       "participation_mode": "editorial",
-      "interval_minutes": 120,
+      "interval_minutes": 60,
       "tags": [
-        "宏观",
-        "监管",
-        "待自建RSSHub"
+        "政策"
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "id": "json-nfra-ggtz",
+      "name": "金融监管总局·公告通知[把握度:likely]",
+      "kind": "json_list",
+      "config": {
+        "url": "https://www.nfra.gov.cn/cbircweb/DocInfo/SelectDocByItemUUIdsAndChild?itemUUIds=910302&pageSize=50&orderBy=builddate",
+        "headers": {
+          "Referer": "https://www.nfra.gov.cn/"
+        },
+        "itemsPath": "data",
+        "titlePaths": [
+          "docTitle"
+        ],
+        "summaryPaths": [
+          "docSubtitle",
+          "docSummary"
+        ],
+        "publishedAtPath": "publishDate",
+        "externalIdPath": "docId",
+        "urlTemplate": "https://www.nfra.gov.cn/cn/view/pages/ItemDetail.html?docId={docId}&itemId={itemId}",
+        "allowUrlPrefixes": [
+          "https://www.nfra.gov.cn/cn/view/pages/ItemDetail.html"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 20
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": "nfab",
+      "participation_mode": "editorial",
+      "interval_minutes": 60,
+      "tags": [
+        "政策"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
     },
     {
       "id": "rss-chinamoney-2834",

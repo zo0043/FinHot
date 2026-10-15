@@ -113,8 +113,8 @@ export function deriveCategory(structureCategory: string | null, itemType: strin
 
 /**
  * 公司主题：id → 显示名、卡片上显示的标签（null 表示只用 entity:<id> 归类）、别名。
- * 这 43 个 id 就是 topics.json「公司与机构」组的 slug（主题页的主键）：加一条要同时改 topics.json 与
- * seed 里的 topicEntityId，少一条会让主题页挂空。displayTag 只给 14 家名片级公司（与 ENTITY_TAGS 一致）；
+ * 这 50 个 id 就是 topics.json「公司与机构」组的 slug（主题页的主键）：加一条要同时改 topics.json 与
+ * seed 里的 topicEntityId，少一条会让主题页挂空（W1 新增的 7 个部委实体尚未建主题页，待 W2 集成时补）。displayTag 只给 14 家名片级公司（与 ENTITY_TAGS 一致）；
  * 监管、交易所、指数、金融机构与人物一律 null，只用 entity:<id> 归类。
  * 别名前三个会进结构提示词，写最能指认的；股票代码是最干净的指认，名片股都带上。
  */
@@ -129,6 +129,13 @@ export const ENTITIES: Record<string, { name: string; displayTag: string | null;
   mof: { name: "财政部", displayTag: null, aliases: ["财政部", "中国财政部"] },
   ndrc: { name: "国家发展改革委", displayTag: null, aliases: ["国家发展改革委", "发改委", "NDRC"] },
   mofcom: { name: "商务部", displayTag: null, aliases: ["商务部", "中国商务部", "MOFCOM"] },
+  most: { name: "科技部", displayTag: null, aliases: ["科技部", "科学技术部", "MOST"] },
+  mwr: { name: "水利部", displayTag: null, aliases: ["水利部", "MWR"] },
+  moe: { name: "教育部", displayTag: null, aliases: ["教育部", "MOE"] },
+  sasac: { name: "国务院国资委", displayTag: null, aliases: ["国务院国资委", "国资委", "SASAC"] },
+  mot: { name: "交通运输部", displayTag: null, aliases: ["交通运输部", "交通部", "MOT"] },
+  cac: { name: "国家网信办", displayTag: null, aliases: ["国家网信办", "网信办", "网信委", "CAC"] },
+  forestry: { name: "国家林草局", displayTag: null, aliases: ["国家林草局", "林草局", "国家林业和草原局"] },
   gov: { name: "国务院", displayTag: null, aliases: ["国务院", "国常会", "国务院常务会议"] },
   // ── 交易所与指数 ──
   sse: { name: "上海证券交易所", displayTag: null, aliases: ["上海证券交易所", "上交所", "SSE"] },
@@ -189,6 +196,13 @@ export const IDENTITY_LEXICON: ReadonlyArray<{ id: string; name: string; pattern
   { id: "mof", name: "财政部", patterns: [/财政部|中国财政部|\bMOF\b/i, /财政部部长|财政部(?:公布|发布|表示|新闻发言人|办公厅)/i] },
   { id: "ndrc", name: "国家发展改革委", patterns: [/国家发展改革委|国家发改委|发改委|\bNDRC\b/i, /发改委主任|发改委(?:新闻发言人|表示|印发)/i] },
   { id: "mofcom", name: "商务部", patterns: [/商务部|中国商务部|\bMOFCOM\b/i, /商务部部长|商务部(?:新闻发言人|表示|对)/i] },
+  { id: "most", name: "科技部", patterns: [/科技部|科学技术部|\bMOST\b/i, /科技部长|科技部(?:新闻发言人|表示|印发)/i] },
+  { id: "mwr", name: "水利部", patterns: [/水利部|\bMWR\b/i, /水利部部长|水利部(?:表示|印发)/i] },
+  { id: "moe", name: "教育部", patterns: [/教育部|\bMOE\b/i, /教育部长|教育部(?:新闻发言人|表示)/i] },
+  { id: "sasac", name: "国务院国资委", patterns: [/国务院国资委|国资委|\bSASAC\b/i, /国资委主任|国资委(?:表示|印发)/i] },
+  { id: "mot", name: "交通运输部", patterns: [/交通运输部|交通部|\bMOT\b/i, /交通运输部长|交通运输部(?:新闻发言人|表示|印发)/i] },
+  { id: "cac", name: "国家网信办", patterns: [/网信办|中央网络安全和信息化委员会|国家互联网信息办公室|\bCAC\b/i, /网信办主任|网信办(?:表示|印发)/i] },
+  { id: "forestry", name: "国家林草局", patterns: [/林草局|国家林业和草原局|国家林草局/i, /林草局(?:局长|表示|印发)/i] },
   { id: "gov", name: "国务院", patterns: [/国务院|国常会|国务院常务会议|中国政府网/i, /国务院办公厅|国办发|国务院总理/i] },
   // ── 交易所与指数 ──
   { id: "sse", name: "上海证券交易所", patterns: [/上海证券交易所|上交所|\bSSE\b/i, /沪市(?:交易|上市|挂牌|收盘)|科创板(?:上市|申报|受理)/i] },
@@ -258,6 +272,14 @@ export const PUBLISHER_DOMAINS: ReadonlyArray<{ entityId: string; domains: reado
   { entityId: "customs", domains: ["customs.gov.cn"] },
   { entityId: "mof", domains: ["mof.gov.cn"] },
   { entityId: "ndrc", domains: ["ndrc.gov.cn"] },
+  { entityId: "mofcom", domains: ["mofcom.gov.cn"] },
+  { entityId: "most", domains: ["most.gov.cn"] },
+  { entityId: "mwr", domains: ["mwr.gov.cn"] },
+  { entityId: "moe", domains: ["moe.gov.cn"] },
+  { entityId: "sasac", domains: ["sasac.gov.cn"] },
+  { entityId: "mot", domains: ["mot.gov.cn"] },
+  { entityId: "cac", domains: ["cac.gov.cn"] },
+  { entityId: "forestry", domains: ["forestry.gov.cn"] },
   { entityId: "sse", domains: ["sse.com.cn"] },
   { entityId: "szse", domains: ["szse.cn"] },
   { entityId: "bse", domains: ["bse.cn"] },
