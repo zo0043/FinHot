@@ -145,7 +145,7 @@
         "publishedAtPath": "pubtime",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "id",
-        "urlTemplate": "{url}",
+        "urlTemplate": "{raw:url}",
         "allowUrlPrefixes": [
           "https://www.gov.cn/"
         ],
@@ -184,7 +184,7 @@
         "publishedAtPath": "pubtime",
         "publishedAtUnit": "epoch_ms",
         "externalIdPath": "id",
-        "urlTemplate": "{url}",
+        "urlTemplate": "{raw:url}",
         "allowUrlPrefixes": [
           "https://www.gov.cn/"
         ],
