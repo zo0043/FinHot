@@ -30,3 +30,14 @@
 - 待观察：policy_stage 实际覆盖（等回填跑到政策类文章）、deepseek 在长提示词评分下的延迟/质量（对比旧模型分数分布）
 
 
+
+## Day 1 追加（2026-10-16 上午）
+
+**修复**：国务院文件库 ×2 源静默丢数据（found=20/new=0）——`urlTemplate: "{url}"` 把 URL 值 percent 编码（`https%3A//...`）致 `allowed()` 前缀全拒；改 `"{raw:url}"`（commit 59326ac），DB config 已同步 UPDATE，验证 40 份文档入库（按设计 stale-on-discovery 归档为历史材料，不刷屏）。
+
+**历史垃圾清理**（用户要求）：
+- 旧口径入选下架：298 条（10-15 15:00 UTC 之前的 selected 全部摘标记，数据保留）
+- 未分析积压删除：28,622 articles + 26,023 publications 壳 + 30,776 revisions + 29,547 discoveries（无 analyses 关联，零影响台账/行情/回测）
+- 清理后：articles 31,547→2,925（全部已分析）、selected 336→39（仅新口径时代）、unanalyzed=0；analyses 3,087 / prediction_ledger 2,643 / market_daily 206 无损
+- worker 重启清内存队列；站点 200
+- 注：国务院文档库每小时会把同一页 ~20 条重新入库（删除后 storedTitles 为空）→ 正常，分析一次后即去重稳定
