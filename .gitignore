@@ -18,3 +18,4 @@ fontsource-noto-sans-sc-*.tgz
 
 # runtime logs
 logs/
+/worktrees/
