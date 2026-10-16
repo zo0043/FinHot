@@ -38,7 +38,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-szse-announcement",
@@ -87,7 +87,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-csrc-zhengwu",
@@ -541,7 +541,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-sina-7x24",
@@ -795,7 +795,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-wscn-global",
@@ -869,7 +869,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-wscn-commodity",
@@ -942,7 +942,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-zhitong-announcement",
@@ -978,7 +978,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-gelonghui-live",
@@ -1012,7 +1012,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-cls-telegraph",
@@ -1115,7 +1115,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-hkexnews-hlist",
@@ -1882,7 +1882,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-wsj-markets",
@@ -1957,7 +1957,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rss-gn-eu",
@@ -2193,7 +2193,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-em-rzrq",
@@ -2229,7 +2229,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "json-em-southbound",
@@ -2294,7 +2294,7 @@
       ],
       "site_fulltext": false,
       "syndicate_fulltext": false,
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "web-guba-000858",
