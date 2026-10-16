@@ -20,8 +20,13 @@
 - 已停：ps-backfill 容器（避免 400 空转），key 修复后补跑 `scripts/backfill-policy-stage.ts --batch 20`
 
 **待 key 修复后的动作**
-1. 更新 FinHot/.env 的 LLM_API_KEY（必要时换 LLM_MODEL 为代理当前可用模型，先 GET /v1/models 核实）
-2. `sudo docker compose up -d --force-recreate worker api`（重新读 env）
-3. 重启回填：`sudo docker compose run -d --name ps-backfill --no-deps setup node scripts/backfill-policy-stage.ts --batch 20`（~1830+ 行，1-3 小时，白天单线程）
-4. 进入 3 天观察（Day 1/2/3 每日一次）：新源采集成功率（≥90%）、政策类占比、policy_stage 覆盖率（selected 的 policy_regulation，≥90%）、direction 失败率（重试后 <3%）、token 成本（预算 +40~80 条/天，超则源级停用）
-5. 观察达标后进入 Task 6（gold 重标工作表，含人工门禁）
+1. ~~更新 key~~ → 实际解决（2026-10-16 10:30）：key 本身可用，是 step-5-preview 订阅失效。按用户指示切 **LLM_MODEL=deepseek-v4.1-flash**（实测：直连 https、response_format json_object 兼容、reasoning 无法关闭但 max_tokens 给足后 content 正常）；删 LLM_EXTRA_JSON（thinking flag 对该模型无效）；direction maxTokens 300→1024 / timeout 30s→60s（commit 0761881，reasoning 会先吃预算）；镜像重建 + force-recreate
+
+## Day 1（2026-10-16 上午，模型切换后）
+
+- 采集：10-15 14:57 UTC 恢复起连续无断流（每 15 分钟一波，含 659 条首轮）
+- 评分：切换后恢复——recreate 后 10 分钟 5 条新 analyses；此前 10 小时分析为空是旧 worker 在坏 key 400 上卡住（head-of-line），非采集问题
+- 回填：ps-backfill 运行中，40/2534，failed=0（~2-3 条/分钟，预计 15h 跑完；前 20 条非政策类 stage=null 正常）
+- 待观察：policy_stage 实际覆盖（等回填跑到政策类文章）、deepseek 在长提示词评分下的延迟/质量（对比旧模型分数分布）
+
+
