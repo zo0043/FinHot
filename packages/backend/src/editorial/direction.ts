@@ -110,8 +110,9 @@ export async function judgeDirection(input: DirectionInput, opts: { attemptTag?:
     user,
     schema: DirectionSchema,
     temperature: 0,
-    maxTokens: 300,
-    timeoutMs: opts.timeoutMs ?? 30_000,
+    // 1024：deepseek-v4.1-flash 等带 reasoning 的模型会先消耗推理 token，300 会被吃满导致 content 为空（2026-10-16 实测）
+    maxTokens: 1024,
+    timeoutMs: opts.timeoutMs ?? 60_000,
     attemptTag,
   });
   let res: Awaited<ReturnType<typeof call>>;
